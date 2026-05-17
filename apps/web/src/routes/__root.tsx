@@ -2,7 +2,6 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import {
 	createRootRoute,
 	HeadContent,
-	redirect,
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
@@ -15,13 +14,6 @@ import { applyThemeToDocument, readWebSettings } from "../lib/web-settings";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
-	beforeLoad: ({ location }) => {
-		if (typeof window === "undefined") return;
-		const token = getAuthToken();
-		if (!token && location.pathname !== "/login") {
-			throw redirect({ to: "/login" });
-		}
-	},
 	head: () => ({
 		meta: [
 			{
@@ -77,6 +69,13 @@ function RootHydrationEffects() {
 		const settings = readWebSettings();
 		applyThemeToDocument(settings.theme);
 		void i18n.changeLanguage(settings.language);
+
+		// Auth guard: runs after hydration to cover the SSR gap where
+		// beforeLoad is skipped on the server (no localStorage available).
+		const token = getAuthToken();
+		if (!token && window.location.pathname !== "/login") {
+			window.location.replace("/login");
+		}
 	}, []);
 
 	return null;
