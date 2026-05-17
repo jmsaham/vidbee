@@ -251,7 +251,6 @@ export function DownloadItem({
 	const [pendingTab, setPendingTab] = useState<"details" | "logs" | null>(null);
 	const [logAutoScroll, setLogAutoScroll] = useState(true);
 	const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
-	const [playerFilePath, setPlayerFilePath] = useState<string | null>(null);
 
 	const logContainerRef = useRef<HTMLDivElement | null>(null);
 	const lastSheetOpenRef = useRef(false);
@@ -399,18 +398,17 @@ export function DownloadItem({
 
 	const handleOpenFile = async () => {
 		const result = await tryFileOperation(async (filePath) => {
-			const response = await orpcClient.files.exists({ path: filePath });
-			return response.exists;
+			const response = await orpcClient.files.openFile({ path: filePath });
+			return response.success;
 		});
 
-		if (!result.success || !result.filePath) {
+		if (!result.success) {
 			toast.error(t("notifications.openFileFailed"));
 			return;
 		}
 
-		setResolvedFilePath(result.filePath);
+		setResolvedFilePath(result.filePath ?? null);
 		setFileExists(true);
-		setPlayerFilePath(result.filePath);
 	};
 
 	const handleCopyLink = async () => {
@@ -1215,38 +1213,5 @@ export function DownloadItem({
 				)}
 			</ContextMenuContent>
 		</ContextMenu>
-		{playerFilePath && (
-			<dialog
-				aria-label={t("download.playVideo")}
-				className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 w-full h-full"
-				onClick={() => setPlayerFilePath(null)}
-				open
-			>
-				<div
-					className="relative w-full max-w-4xl p-4"
-					onClick={(e) => e.stopPropagation()}
-					onKeyDown={(e) => {
-						if (e.key === "Escape") setPlayerFilePath(null);
-					}}
-				>
-					<button
-						aria-label={t("download.closePlayer")}
-						className="absolute top-2 right-2 z-10 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
-						onClick={() => setPlayerFilePath(null)}
-						type="button"
-					>
-						<X className="h-5 w-5" />
-					</button>
-					<video
-						autoPlay
-						className="w-full rounded-lg"
-						controls
-						src={`/files/stream?path=${encodeURIComponent(playerFilePath)}`}
-					>
-						<track kind="captions" />
-					</video>
-				</div>
-			</dialog>
-		)}
 	);
 }
