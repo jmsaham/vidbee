@@ -287,6 +287,7 @@
     "cookiesTipDescription": "配置 Cookies 可将下载成功率从 <strong>70%</strong> 提升到 <strong>99%</strong>。",
     "cookiesTipCta": "去配置 Cookies",
     "openDownloadFolder": "打开下载文件夹",
+    "playVideo": "Play",
     "openFile": "打开文件",
     "openFileLocation": "打开文件位置",
     "openFolder": "打开文件夹",

@@ -1,6 +1,8 @@
+import { createReadStream, statSync } from 'node:fs'
 import { lookup } from 'node:dns/promises'
 import type { ServerResponse } from 'node:http'
 import net from 'node:net'
+import path from 'node:path'
 import cors from '@fastify/cors'
 import { OpenAPIHandler } from '@orpc/openapi/fastify'
 import { OpenAPIReferencePlugin } from '@orpc/openapi/plugins'
@@ -283,6 +285,64 @@ export const createApiServer = async () => {
     }
 
     return reply.send(imageBuffer)
+  })
+
+  const STREAM_MIME_TYPES: Record<string, string> = {
+    '.mp4': 'video/mp4',
+    '.mkv': 'video/x-matroska',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime',
+    '.m4v': 'video/mp4',
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.ogg': 'audio/ogg',
+    '.opus': 'audio/opus',
+    '.wav': 'audio/wav',
+    '.flac': 'audio/flac',
+    '.aac': 'audio/aac'
+  }
+
+  fastify.get<{ Querystring: { path?: string } }>('/files/stream', async (request, reply) => {
+    const filePath = request.query.path?.trim()
+    if (!filePath) return reply.code(400).send({ message: 'Missing path parameter.' })
+
+    const resolved = path.resolve(filePath)
+    const downloadDir = path.resolve(process.env.VIDBEE_DOWNLOAD_DIR ?? '/data/downloads')
+    if (resolved !== downloadDir && !resolved.startsWith(downloadDir + path.sep)) {
+      return reply.code(403).send({ message: 'Access denied.' })
+    }
+
+    let stat: ReturnType<typeof statSync>
+    try {
+      stat = statSync(resolved)
+      if (!stat.isFile()) return reply.code(404).send({ message: 'Not a file.' })
+    } catch {
+      return reply.code(404).send({ message: 'File not found.' })
+    }
+
+    const contentType = STREAM_MIME_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream'
+    const fileSize = stat.size
+    const rangeHeader = request.headers.range
+
+    if (rangeHeader) {
+      const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-')
+      const start = Number.parseInt(startStr ?? '0', 10)
+      const end = endStr ? Number.parseInt(endStr, 10) : fileSize - 1
+      const chunkSize = end - start + 1
+      reply.code(206)
+        .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+        .header('Accept-Ranges', 'bytes')
+        .header('Content-Length', String(chunkSize))
+        .header('Content-Type', contentType)
+      return reply.send(createReadStream(resolved, { start, end }))
+    }
+
+    reply
+      .header('Content-Length', String(fileSize))
+      .header('Content-Type', contentType)
+      .header('Accept-Ranges', 'bytes')
+    return reply.send(createReadStream(resolved))
   })
 
   fastify.get('/events', async (request, reply) => {

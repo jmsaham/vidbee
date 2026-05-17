@@ -13,6 +13,11 @@ import {
 	ContextMenuTrigger,
 } from "@vidbee/ui/components/ui/context-menu";
 import {
+	Dialog,
+	DialogContent,
+	DialogTitle,
+} from "@vidbee/ui/components/ui/dialog";
+import {
 	DOWNLOAD_FEEDBACK_ISSUE_TITLE,
 	FeedbackLinkButtons,
 } from "@vidbee/ui/components/ui/feedback-link-buttons";
@@ -43,6 +48,7 @@ import {
 	File,
 	FolderOpen,
 	Loader2,
+	Play,
 	RotateCw,
 	Trash2,
 	X,
@@ -251,6 +257,7 @@ export function DownloadItem({
 	const [pendingTab, setPendingTab] = useState<"details" | "logs" | null>(null);
 	const [logAutoScroll, setLogAutoScroll] = useState(true);
 	const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+	const [playerFilePath, setPlayerFilePath] = useState<string | null>(null);
 
 	const logContainerRef = useRef<HTMLDivElement | null>(null);
 	const lastSheetOpenRef = useRef(false);
@@ -493,6 +500,7 @@ export function DownloadItem({
 	const canRetry = download.status === "error";
 	const showCopyAction = isCompletedStatus && fileExists;
 	const showOpenFolderAction = false;
+	const canPlay = isCompletedStatus && fileExists;
 	const canCopyLink = Boolean(download.url);
 	const canOpenFile = isCompletedStatus && fileExists;
 	const canDeleteFile = isCompletedStatus && fileExists;
@@ -774,6 +782,7 @@ export function DownloadItem({
 	};
 
 	return (
+		<>
 		<ContextMenu onOpenChange={setIsContextMenuOpen}>
 			<ContextMenuTrigger asChild>
 				<div
@@ -921,6 +930,19 @@ export function DownloadItem({
 											variant="ghost"
 										>
 											<Copy className="h-4 w-4" />
+										</Button>
+									)}
+									{canPlay && (
+										<Button
+											className="h-8 w-8 shrink-0 rounded-full"
+											onClick={(event) => {
+												event.stopPropagation();
+												setPlayerFilePath(resolvedFilePath);
+											}}
+											size="icon"
+											variant="ghost"
+										>
+											<Play className="h-4 w-4" />
 										</Button>
 									)}
 									{showOpenFolderAction && (
@@ -1213,5 +1235,29 @@ export function DownloadItem({
 				)}
 			</ContextMenuContent>
 		</ContextMenu>
+		<Dialog
+			onOpenChange={(open) => {
+				if (!open) setPlayerFilePath(null);
+			}}
+			open={Boolean(playerFilePath)}
+		>
+			<DialogContent className="max-w-3xl overflow-hidden border-0 bg-black p-0">
+				<DialogTitle className="sr-only">
+					{download.title ?? t("download.playVideo")}
+				</DialogTitle>
+				{playerFilePath && (
+					<video
+						autoPlay
+						className="max-h-[80vh] w-full"
+						controls
+						key={playerFilePath}
+						src={`/files/stream?path=${encodeURIComponent(playerFilePath)}`}
+					>
+						<track kind="captions" />
+					</video>
+				)}
+			</DialogContent>
+		</Dialog>
+		</>
 	);
 }
