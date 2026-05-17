@@ -3,12 +3,13 @@ FROM node:22-alpine
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 WORKDIR /app
 
-ARG VITE_API_URL=http://localhost:3100
+ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
+ENV API_PROXY_TARGET=http://api:3100
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/package.json

@@ -7,6 +7,8 @@ import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import packageJson from "./package.json";
 
+const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:3100";
+
 const config = defineConfig({
 	define: {
 		__APP_VERSION__: JSON.stringify(packageJson.version),
@@ -27,17 +29,18 @@ const config = defineConfig({
 		viteReact(),
 	],
 	server: {
+		allowedHosts: ["vidbee.c0mrade.io"],
 		proxy: {
 			"/events": {
-				target: "http://localhost:3100",
+				target: apiTarget,
 				changeOrigin: true,
 			},
 			"/rpc": {
-				target: "http://localhost:3100",
+				target: apiTarget,
 				changeOrigin: true,
 			},
 			"/images": {
-				target: "http://localhost:3100",
+				target: apiTarget,
 				changeOrigin: true,
 			},
 		},
