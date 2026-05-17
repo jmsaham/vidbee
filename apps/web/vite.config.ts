@@ -29,6 +29,7 @@ const config = defineConfig({
 		viteReact(),
 	],
 	server: {
+		allowedHosts: ["vidbee.c0mrade.io"],
 		proxy: {
 			"/events": {
 				target: apiTarget,
