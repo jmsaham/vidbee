@@ -46,7 +46,7 @@ import {
 	TooltipTrigger,
 } from "@vidbee/ui/components/ui/tooltip";
 import { AlertTriangle, Folder, RefreshCw, Trash2 } from "lucide-react";
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useWebSettings } from "../../hooks/use-web-settings";
@@ -397,7 +397,7 @@ export const SettingsPage = () => {
 			});
 	};
 
-	const loadUsers = async () => {
+	const loadUsers = useCallback(async () => {
 		setUsersLoading(true);
 		try {
 			const response = await orpcClient.users.list();
@@ -407,23 +407,12 @@ export const SettingsPage = () => {
 		} finally {
 			setUsersLoading(false);
 		}
-	};
+	}, [t]);
 
 	useEffect(() => {
 		if (activeTab !== "users") return;
-		void (async () => {
-			setUsersLoading(true);
-			try {
-				const response = await orpcClient.users.list();
-				setUsers(response.users);
-			} catch {
-				toast.error(t("errors.networkError"));
-			} finally {
-				setUsersLoading(false);
-			}
-		})();
-	// activeTab and t are the only deps needed here
-	}, [activeTab, t]);
+		void loadUsers();
+	}, [activeTab, loadUsers]);
 
 	const handleAddUser = async () => {
 		if (!newUsername.trim() || !newPassword.trim()) return;
@@ -498,7 +487,7 @@ export const SettingsPage = () => {
 						onValueChange={(value) => setActiveTab(value as SettingsTab)}
 						value={activeTab}
 					>
-						<TabsList className="grid w-full grid-cols-4">
+						<TabsList className="flex w-full">
 							<TabsTrigger value="general">{t("settings.general")}</TabsTrigger>
 							<TabsTrigger value="cookies">
 								{t("settings.cookiesTab")}
@@ -1213,7 +1202,7 @@ export const SettingsPage = () => {
 											/>
 											<Button
 												disabled={addUserLoading || !newUsername.trim() || !newPassword.trim()}
-												onClick={handleAddUser}
+												onClick={() => void handleAddUser()}
 											>
 												{t("auth.addUser")}
 											</Button>
