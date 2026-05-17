@@ -1,5 +1,6 @@
 services:
   api:
+    container_name: app-api
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -22,6 +23,7 @@ services:
     restart: unless-stopped
 
   web:
+    container_name: app-web
     build:
       context: .
       dockerfile: apps/web/Dockerfile
