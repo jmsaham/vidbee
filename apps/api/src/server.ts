@@ -1,6 +1,8 @@
+import { createReadStream, statSync } from 'node:fs'
 import { lookup } from 'node:dns/promises'
 import type { ServerResponse } from 'node:http'
 import net from 'node:net'
+import path from 'node:path'
 import cors from '@fastify/cors'
 import { OpenAPIHandler } from '@orpc/openapi/fastify'
 import { OpenAPIReferencePlugin } from '@orpc/openapi/plugins'
@@ -283,6 +285,62 @@ export const createApiServer = async () => {
     }
 
     return reply.send(imageBuffer)
+  })
+
+  const MIME_TYPES: Record<string, string> = {
+    '.mp4': 'video/mp4',
+    '.mkv': 'video/x-matroska',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime',
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.ogg': 'audio/ogg',
+    '.opus': 'audio/opus',
+    '.wav': 'audio/wav',
+    '.flac': 'audio/flac'
+  }
+
+  fastify.get<{ Querystring: { path?: string } }>('/files/stream', async (request, reply) => {
+    const filePath = request.query.path?.trim()
+    if (!filePath) {
+      return reply.code(400).send({ message: 'Missing path parameter.' })
+    }
+
+    const resolvedPath = path.resolve(filePath)
+    const downloadDir = path.resolve(process.env.VIDBEE_DOWNLOAD_DIR ?? '/data/downloads')
+    if (!resolvedPath.startsWith(downloadDir + path.sep) && resolvedPath !== downloadDir) {
+      return reply.code(403).send({ message: 'Access denied.' })
+    }
+
+    let stat: ReturnType<typeof statSync>
+    try {
+      stat = statSync(resolvedPath)
+      if (!stat.isFile()) return reply.code(404).send({ message: 'Not a file.' })
+    } catch {
+      return reply.code(404).send({ message: 'File not found.' })
+    }
+
+    const contentType = MIME_TYPES[path.extname(resolvedPath).toLowerCase()] ?? 'application/octet-stream'
+    const fileSize = stat.size
+    const rangeHeader = request.headers.range
+
+    if (rangeHeader) {
+      const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-')
+      const start = parseInt(startStr ?? '0', 10)
+      const end = endStr ? parseInt(endStr, 10) : fileSize - 1
+      reply.code(206)
+      reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+      reply.header('Accept-Ranges', 'bytes')
+      reply.header('Content-Length', String(end - start + 1))
+      reply.header('Content-Type', contentType)
+      return reply.send(createReadStream(resolvedPath, { start, end }))
+    }
+
+    reply.header('Content-Length', String(fileSize))
+    reply.header('Content-Type', contentType)
+    reply.header('Accept-Ranges', 'bytes')
+    return reply.send(createReadStream(resolvedPath))
   })
 
   fastify.get('/events', async (request, reply) => {

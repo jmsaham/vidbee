@@ -287,6 +287,8 @@
     "cookiesTipDescription": "Configure cookies to raise success rates from <strong>70%</strong> to <strong>99%</strong>.",
     "cookiesTipCta": "Set up cookies",
     "openDownloadFolder": "Open Download Folder",
+    "playVideo": "Play Video",
+    "closePlayer": "Close player",
     "openFile": "Open File",
     "openFileLocation": "Open File Location",
     "openFolder": "Open Folder",
