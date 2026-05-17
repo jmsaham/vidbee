@@ -2,7 +2,7 @@ import { List, Rocket, Video } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import { Button } from './button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader } from './dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
@@ -79,6 +79,7 @@ export const DownloadDialogLayout = ({
           value={activeTab}
         >
           <DialogHeader>
+            <DialogTitle className="sr-only">{singleTabLabel}</DialogTitle>
             <TabsList>
               <TabsTrigger onClick={() => onActiveTabChange('single')} value="single">
                 <Video className="h-3.5 w-3.5" />
