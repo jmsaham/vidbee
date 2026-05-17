@@ -1,7 +1,13 @@
 import { oc } from '@orpc/contract'
 import {
+  AuthLoginInputSchema,
+  AuthLoginOutputSchema,
   CancelDownloadInputSchema,
   CancelDownloadOutputSchema,
+  ChangePasswordInputSchema,
+  ChangePasswordOutputSchema,
+  CreateUserInputSchema,
+  CreateUserOutputSchema,
   DirectoryListInputSchema,
   CreateDownloadInputSchema,
   CreateDownloadOutputSchema,
@@ -11,6 +17,7 @@ import {
   ListDirectoriesOutputSchema,
   ListDownloadsOutputSchema,
   ListHistoryOutputSchema,
+  ListUsersOutputSchema,
   PlaylistDownloadInputSchema,
   PlaylistDownloadOutputSchema,
   PlaylistInfoInputSchema,
@@ -18,6 +25,8 @@ import {
   RemoveHistoryByPlaylistInputSchema,
   RemoveHistoryItemsInputSchema,
   RemoveHistoryOutputSchema,
+  RemoveUserInputSchema,
+  RemoveUserOutputSchema,
   SetWebSettingsInputSchema,
   StatusOutputSchema,
   GetWebSettingsOutputSchema,
@@ -64,5 +73,14 @@ export const downloaderContract = {
   settings: {
     get: oc.output(GetWebSettingsOutputSchema),
     set: oc.input(SetWebSettingsInputSchema).output(GetWebSettingsOutputSchema)
+  },
+  auth: {
+    login: oc.input(AuthLoginInputSchema).output(AuthLoginOutputSchema)
+  },
+  users: {
+    list: oc.output(ListUsersOutputSchema),
+    create: oc.input(CreateUserInputSchema).output(CreateUserOutputSchema),
+    remove: oc.input(RemoveUserInputSchema).output(RemoveUserOutputSchema),
+    changePassword: oc.input(ChangePasswordInputSchema).output(ChangePasswordOutputSchema)
   }
 }

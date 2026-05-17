@@ -1,5 +1,5 @@
-import { createReadStream, statSync } from 'node:fs'
 import { lookup } from 'node:dns/promises'
+import { createReadStream, statSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 import net from 'node:net'
 import path from 'node:path'
@@ -8,7 +8,8 @@ import { OpenAPIHandler } from '@orpc/openapi/fastify'
 import { OpenAPIReferencePlugin } from '@orpc/openapi/plugins'
 import { RPCHandler } from '@orpc/server/fastify'
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
-import Fastify from 'fastify'
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
+import { ensureDefaultUser, extractBearerToken, validateToken } from './lib/auth'
 import { startTaskQueue, stopTaskQueue, taskQueue } from './lib/downloader'
 import { projectTaskForApi } from './lib/projection'
 import { rpcRouter } from './lib/rpc-router'
@@ -107,9 +108,18 @@ const parseRemoteImageUrl = (value: string): URL | null => {
   }
 }
 
+const isRpcAuthRequired = (url: string): boolean => {
+  if (!url.startsWith('/rpc/')) {
+    return false
+  }
+  const path = url.split('?')[0]
+  return path !== '/rpc/auth/login'
+}
+
 export const createApiServer = async () => {
   await startTaskQueue()
   await startApiSubscriptions()
+  await ensureDefaultUser()
   const isDev = process.env.NODE_ENV !== 'production'
 
   const fastify = Fastify({
@@ -165,7 +175,9 @@ export const createApiServer = async () => {
   })
   taskQueue.on('progress', (e) => {
     const t = taskQueue.get(e.taskId)
-    if (t) sseHub.publish('task-updated', { task: projectTaskForApi(t) })
+    if (t) {
+      sseHub.publish('task-updated', { task: projectTaskForApi(t) })
+    }
   })
   taskQueue.on('transition', (e) => {
     if (e.to === 'queued' || e.to === 'cancelled' || e.to === 'completed' || e.to === 'failed') {
@@ -305,7 +317,9 @@ export const createApiServer = async () => {
 
   fastify.get<{ Querystring: { path?: string } }>('/files/stream', async (request, reply) => {
     const filePath = request.query.path?.trim()
-    if (!filePath) return reply.code(400).send({ message: 'Missing path parameter.' })
+    if (!filePath) {
+      return reply.code(400).send({ message: 'Missing path parameter.' })
+    }
 
     const resolved = path.resolve(filePath)
     const downloadDir = path.resolve(process.env.VIDBEE_DOWNLOAD_DIR ?? '/data/downloads')
@@ -316,12 +330,15 @@ export const createApiServer = async () => {
     let stat: ReturnType<typeof statSync>
     try {
       stat = statSync(resolved)
-      if (!stat.isFile()) return reply.code(404).send({ message: 'Not a file.' })
+      if (!stat.isFile()) {
+        return reply.code(404).send({ message: 'Not a file.' })
+      }
     } catch {
       return reply.code(404).send({ message: 'File not found.' })
     }
 
-    const contentType = STREAM_MIME_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream'
+    const contentType =
+      STREAM_MIME_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream'
     const fileSize = stat.size
     const rangeHeader = request.headers.range
 
@@ -330,7 +347,8 @@ export const createApiServer = async () => {
       const start = Number.parseInt(startStr ?? '0', 10)
       const end = endStr ? Number.parseInt(endStr, 10) : fileSize - 1
       const chunkSize = end - start + 1
-      reply.code(206)
+      reply
+        .code(206)
         .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
         .header('Accept-Ranges', 'bytes')
         .header('Content-Length', String(chunkSize))
@@ -374,13 +392,23 @@ export const createApiServer = async () => {
   // mirrors `subscriptionContract` 1:1 (NEX-132). The match runs before the
   // generic `/rpc/*` handler because Fastify applies the most-specific route
   // wins rule for `/rpc/subscriptions/*`.
-  fastify.all('/rpc/subscriptions/*', async (request, reply) => {
+  const rpcAuthPreHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!isRpcAuthRequired(request.url)) {
+      return
+    }
+    const token = extractBearerToken(request.headers.authorization)
+    if (!(token && validateToken(token))) {
+      await reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+  }
+
+  fastify.all('/rpc/subscriptions/*', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await subscriptionsRpcHandler.handle(request, reply, {
       prefix: '/rpc/subscriptions'
     })
   })
 
-  fastify.all('/rpc/*', async (request, reply) => {
+  fastify.all('/rpc/*', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await rpcHandler.handle(request, reply, {
       prefix: '/rpc'
     })

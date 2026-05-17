@@ -18,9 +18,28 @@ export const apiUrl = isServer
 export const eventsUrl = `${apiUrl}/events`;
 const rpcUrl = `${apiUrl}/rpc`;
 
+const AUTH_TOKEN_KEY = "vidbee-auth-token";
+
+export const getAuthToken = (): string | null => {
+	if (typeof window === "undefined") return null;
+	return localStorage.getItem(AUTH_TOKEN_KEY);
+};
+
+export const setAuthToken = (token: string): void => {
+	localStorage.setItem(AUTH_TOKEN_KEY, token);
+};
+
+export const clearAuthToken = (): void => {
+	localStorage.removeItem(AUTH_TOKEN_KEY);
+};
+
 export const orpcClient: ContractRouterClient<typeof downloaderContract> =
 	createORPCClient(
 		new RPCLink({
 			url: rpcUrl,
+			headers: () => {
+				const token = getAuthToken();
+				return token ? { Authorization: `Bearer ${token}` } : {};
+			},
 		}),
 	);

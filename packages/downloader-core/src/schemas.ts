@@ -360,3 +360,49 @@ export const GetWebSettingsOutputSchema = z.object({
 export const SetWebSettingsInputSchema = z.object({
   settings: WebAppSettingsSchema
 })
+
+export const AuthLoginInputSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1)
+})
+
+export const AuthLoginOutputSchema = z.object({
+  token: z.string(),
+  username: z.string()
+})
+
+export const UserEntrySchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  createdAt: z.number()
+})
+
+export const ListUsersOutputSchema = z.object({
+  users: z.array(UserEntrySchema)
+})
+
+export const CreateUserInputSchema = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(4).max(128)
+})
+
+export const CreateUserOutputSchema = z.object({
+  user: z.object({ id: z.string(), username: z.string() })
+})
+
+export const RemoveUserInputSchema = z.object({
+  id: z.string().min(1)
+})
+
+export const RemoveUserOutputSchema = z.object({
+  removed: z.boolean()
+})
+
+export const ChangePasswordInputSchema = z.object({
+  id: z.string().min(1),
+  password: z.string().min(4).max(128)
+})
+
+export const ChangePasswordOutputSchema = z.object({
+  ok: z.boolean()
+})

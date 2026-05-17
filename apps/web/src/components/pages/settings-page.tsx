@@ -45,7 +45,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@vidbee/ui/components/ui/tooltip";
-import { AlertTriangle, Folder, RefreshCw } from "lucide-react";
+import { AlertTriangle, Folder, RefreshCw, Trash2 } from "lucide-react";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -54,11 +54,11 @@ import type {
 	OneClickContainerOption,
 	OneClickQualityPreset,
 } from "../../lib/download-format-preferences";
-import { orpcClient } from "../../lib/orpc-client";
+import { clearAuthToken, orpcClient } from "../../lib/orpc-client";
 import type { ThemeValue, WebAppSettings } from "../../lib/web-settings";
 import { AppShell } from "../layout/app-shell";
 
-type SettingsTab = "advanced" | "cookies" | "general";
+type SettingsTab = "advanced" | "cookies" | "general" | "users";
 
 type BrowserProfileValidationReason =
 	| "browserUnsupported"
@@ -95,6 +95,12 @@ const parsePlatform = (userAgent: string): string => {
 };
 
 const ABSOLUTE_WINDOWS_PATH_REGEX = /^[A-Za-z]:\\/;
+
+interface UserEntry {
+	id: string;
+	username: string;
+	createdAt: number;
+}
 
 const validateBrowserProfile = (
 	browser: string,
@@ -175,6 +181,14 @@ export const SettingsPage = () => {
 	const [configFileUploading, setConfigFileUploading] = useState(false);
 	const [cookiesFileUploading, setCookiesFileUploading] = useState(false);
 
+	const [users, setUsers] = useState<UserEntry[]>([]);
+	const [usersLoading, setUsersLoading] = useState(false);
+	const [newUsername, setNewUsername] = useState("");
+	const [newPassword, setNewPassword] = useState("");
+	const [addUserLoading, setAddUserLoading] = useState(false);
+	const [changePwUserId, setChangePwUserId] = useState<string | null>(null);
+	const [changePwValue, setChangePwValue] = useState("");
+
 	const parsedBrowserCookies = parseBrowserCookiesSetting(
 		settings.browserForCookies,
 	);
@@ -217,7 +231,7 @@ export const SettingsPage = () => {
 
 		const searchParams = new URLSearchParams(window.location.search);
 		const tab = searchParams.get("tab");
-		if (tab === "general" || tab === "advanced" || tab === "cookies") {
+		if (tab === "general" || tab === "advanced" || tab === "cookies" || tab === "users") {
 			setActiveTab(tab);
 		}
 	}, []);
@@ -383,6 +397,81 @@ export const SettingsPage = () => {
 			});
 	};
 
+	const loadUsers = async () => {
+		setUsersLoading(true);
+		try {
+			const response = await orpcClient.users.list();
+			setUsers(response.users);
+		} catch {
+			toast.error(t("errors.networkError"));
+		} finally {
+			setUsersLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		if (activeTab !== "users") return;
+		void (async () => {
+			setUsersLoading(true);
+			try {
+				const response = await orpcClient.users.list();
+				setUsers(response.users);
+			} catch {
+				toast.error(t("errors.networkError"));
+			} finally {
+				setUsersLoading(false);
+			}
+		})();
+	// activeTab and t are the only deps needed here
+	}, [activeTab, t]);
+
+	const handleAddUser = async () => {
+		if (!newUsername.trim() || !newPassword.trim()) return;
+		setAddUserLoading(true);
+		try {
+			await orpcClient.users.create({ username: newUsername.trim(), password: newPassword });
+			setNewUsername("");
+			setNewPassword("");
+			toast.success(t("auth.addUserSuccess"));
+			void loadUsers();
+		} catch {
+			toast.error(t("auth.addUserError"));
+		} finally {
+			setAddUserLoading(false);
+		}
+	};
+
+	const handleRemoveUser = async (userId: string) => {
+		try {
+			const result = await orpcClient.users.remove({ id: userId });
+			if (!result.removed) {
+				toast.error(t("auth.cannotRemoveLastUser"));
+				return;
+			}
+			toast.success(t("auth.removeUserSuccess"));
+			void loadUsers();
+		} catch {
+			toast.error(t("auth.removeUserError"));
+		}
+	};
+
+	const handleChangePassword = async (userId: string) => {
+		if (!changePwValue.trim()) return;
+		try {
+			await orpcClient.users.changePassword({ id: userId, password: changePwValue });
+			setChangePwUserId(null);
+			setChangePwValue("");
+			toast.success(t("auth.changePasswordSuccess"));
+		} catch {
+			toast.error(t("auth.changePasswordError"));
+		}
+	};
+
+	const handleLogout = () => {
+		clearAuthToken();
+		window.location.href = "/login";
+	};
+
 	const handleOpenCookiesGuide = () => {
 		if (typeof window === "undefined") {
 			return;
@@ -409,13 +498,16 @@ export const SettingsPage = () => {
 						onValueChange={(value) => setActiveTab(value as SettingsTab)}
 						value={activeTab}
 					>
-						<TabsList className="grid w-full grid-cols-3">
+						<TabsList className="grid w-full grid-cols-4">
 							<TabsTrigger value="general">{t("settings.general")}</TabsTrigger>
 							<TabsTrigger value="cookies">
 								{t("settings.cookiesTab")}
 							</TabsTrigger>
 							<TabsTrigger value="advanced">
 								{t("settings.advanced")}
+							</TabsTrigger>
+							<TabsTrigger value="users">
+								{t("auth.usersTab")}
 							</TabsTrigger>
 						</TabsList>
 
@@ -1093,6 +1185,130 @@ export const SettingsPage = () => {
 											variant="link"
 										>
 											{t("settings.cookiesGuideLink")}
+										</Button>
+									</ItemActions>
+								</Item>
+							</ItemGroup>
+						</TabsContent>
+
+						<TabsContent className="mt-2 space-y-4" value="users">
+							<ItemGroup>
+								<Item variant="muted">
+									<ItemContent>
+										<ItemTitle>{t("auth.addUser")}</ItemTitle>
+										<ItemDescription>{t("auth.addUserDescription")}</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<div className="flex w-full max-w-md flex-col gap-2">
+											<Input
+												onChange={(e) => setNewUsername(e.target.value)}
+												placeholder={t("auth.username")}
+												value={newUsername}
+											/>
+											<Input
+												onChange={(e) => setNewPassword(e.target.value)}
+												placeholder={t("auth.password")}
+												type="password"
+												value={newPassword}
+											/>
+											<Button
+												disabled={addUserLoading || !newUsername.trim() || !newPassword.trim()}
+												onClick={handleAddUser}
+											>
+												{t("auth.addUser")}
+											</Button>
+										</div>
+									</ItemActions>
+								</Item>
+							</ItemGroup>
+
+							<ItemGroup>
+								<Item variant="muted">
+									<ItemContent>
+										<ItemTitle>{t("auth.manageUsers")}</ItemTitle>
+										<ItemDescription>{t("auth.manageUsersDescription")}</ItemDescription>
+									</ItemContent>
+								</Item>
+								<ItemSeparator />
+								{usersLoading ? (
+									<Item variant="muted">
+										<ItemContent>
+											<ItemDescription>{t("download.loading")}</ItemDescription>
+										</ItemContent>
+									</Item>
+								) : null}
+								{!usersLoading &&
+									users.map((user, idx) => (
+										<div key={user.id}>
+											{idx > 0 && <ItemSeparator />}
+											<Item variant="muted">
+												<ItemContent>
+													<ItemTitle>{user.username}</ItemTitle>
+												</ItemContent>
+												<ItemActions>
+													{changePwUserId === user.id ? (
+														<div className="flex gap-2">
+															<Input
+																className="w-40"
+																onChange={(e) => setChangePwValue(e.target.value)}
+																placeholder={t("auth.newPassword")}
+																type="password"
+																value={changePwValue}
+															/>
+															<Button
+																disabled={!changePwValue.trim()}
+																onClick={() => void handleChangePassword(user.id)}
+																size="sm"
+															>
+																{t("auth.save")}
+															</Button>
+															<Button
+																onClick={() => {
+																	setChangePwUserId(null);
+																	setChangePwValue("");
+																}}
+																size="sm"
+																variant="outline"
+															>
+																{t("download.cancel")}
+															</Button>
+														</div>
+													) : (
+														<div className="flex gap-2">
+															<Button
+																onClick={() => {
+																	setChangePwUserId(user.id);
+																	setChangePwValue("");
+																}}
+																size="sm"
+																variant="secondary"
+															>
+																{t("auth.changePassword")}
+															</Button>
+															<Button
+																onClick={() => void handleRemoveUser(user.id)}
+																size="sm"
+																variant="destructive"
+															>
+																<Trash2 className="h-4 w-4" />
+															</Button>
+														</div>
+													)}
+												</ItemActions>
+											</Item>
+										</div>
+									))}
+							</ItemGroup>
+
+							<ItemGroup>
+								<Item variant="muted">
+									<ItemContent>
+										<ItemTitle>{t("auth.signOut")}</ItemTitle>
+										<ItemDescription>{t("auth.signOutDescription")}</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<Button onClick={handleLogout} variant="secondary">
+											{t("auth.signOut")}
 										</Button>
 									</ItemActions>
 								</Item>

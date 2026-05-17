@@ -1,14 +1,27 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+	createRootRoute,
+	HeadContent,
+	redirect,
+	Scripts,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { i18n } from "../lib/i18n";
+import { getAuthToken } from "../lib/orpc-client";
 import { applyThemeToDocument, readWebSettings } from "../lib/web-settings";
 
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
+	beforeLoad: ({ location }) => {
+		if (typeof window === "undefined") return;
+		const token = getAuthToken();
+		if (!token && location.pathname !== "/login") {
+			throw redirect({ to: "/login" });
+		}
+	},
 	head: () => ({
 		meta: [
 			{

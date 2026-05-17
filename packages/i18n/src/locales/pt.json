@@ -709,5 +709,30 @@
     },
     "popularSection": "Plataformas principais",
     "viewAll": "Ver todos os sites suportados"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInToContinue": "Sign in to continue",
+    "signingIn": "Signing in...",
+    "username": "Username",
+    "password": "Password",
+    "invalidCredentials": "Invalid username or password",
+    "usersTab": "Users",
+    "addUser": "Add User",
+    "addUserDescription": "Create a new user account",
+    "addUserSuccess": "User added successfully",
+    "addUserError": "Failed to add user. Username may already exist.",
+    "manageUsers": "Manage Users",
+    "manageUsersDescription": "View and manage user accounts",
+    "removeUserSuccess": "User removed",
+    "removeUserError": "Failed to remove user",
+    "cannotRemoveLastUser": "Cannot remove the last user",
+    "changePassword": "Change Password",
+    "changePasswordSuccess": "Password changed successfully",
+    "changePasswordError": "Failed to change password",
+    "newPassword": "New password",
+    "save": "Save",
+    "signOut": "Sign out",
+    "signOutDescription": "Sign out of your current session"
   }
 }
