@@ -1,12 +1,14 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
 ENV YTDLP_PATH=/usr/bin/yt-dlp
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
-RUN apk add --no-cache ffmpeg python3 py3-pip make g++ && \
-    pip3 install --no-cache-dir --break-system-packages yt-dlp curl_cffi
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg python3 python3-pip python3-dev make g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp curl_cffi
 
 RUN corepack enable
 

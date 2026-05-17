@@ -184,7 +184,7 @@ export const resolveVideoFormatSelector = (options: YtDlpDownloadOptions): strin
   const audioFormatIds = (options.audioFormatIds ?? []).filter((id) => id.trim() !== '')
 
   if (format && audioFormat === '') {
-    return format
+    return `${format}/bestvideo+bestaudio/best`
   }
 
   if (format && (format.includes('/') || format.includes('+') || format.includes('['))) {
