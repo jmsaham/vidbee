@@ -31,7 +31,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:${VIDBEE_API_PORT:-3100}}
+        VITE_API_URL: ${VITE_API_URL:-http://vidbee-api:${VIDBEE_API_PORT:-3100}}
     depends_on:
       api:
         condition: service_healthy

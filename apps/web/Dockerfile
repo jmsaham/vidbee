@@ -7,7 +7,7 @@ RUN corepack enable
 
 WORKDIR /app
 
-ARG VITE_API_URL=http://localhost:3100
+ARG VITE_API_URL=http://vidbee-api:3100
 ENV VITE_API_URL=${VITE_API_URL}
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
