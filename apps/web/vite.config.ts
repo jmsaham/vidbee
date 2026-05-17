@@ -7,7 +7,7 @@ import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import packageJson from "./package.json";
 
-const apiTarget = process.env.VITE_PROXY_TARGET ?? "http://localhost:3100";
+const apiTarget = process.env.API_PROXY_TARGET ?? "http://localhost:3100";
 
 const config = defineConfig({
 	define: {

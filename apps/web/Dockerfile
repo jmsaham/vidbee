@@ -9,7 +9,7 @@ WORKDIR /app
 
 ARG VITE_API_URL=http://localhost:3100
 ENV VITE_API_URL=${VITE_API_URL}
-ENV VITE_PROXY_TARGET=http://api:3100
+ENV API_PROXY_TARGET=http://api:3100
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web/package.json apps/web/package.json

@@ -9,8 +9,8 @@ services:
       VIDBEE_DOWNLOAD_DIR: /data/downloads
       VIDBEE_HISTORY_STORE_PATH: /data/vidbee/vidbee.db
     volumes:
-      - vidbee-downloads:/data/downloads
-      - vidbee-data:/data/vidbee
+      - /mnt/user/media/vidbee:/data/downloads
+      - /mnt/user/appdata/vidbee/data:/data/vidbee
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/health > /dev/null || exit 1"]
       interval: 10s
@@ -29,7 +29,3 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
-
-volumes:
-  vidbee-downloads:
-  vidbee-data:
