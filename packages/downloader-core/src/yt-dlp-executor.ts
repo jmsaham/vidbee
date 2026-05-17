@@ -585,9 +585,22 @@ function extractFormatId(rawLog: string): string | undefined {
   return value
 }
 
+const VIDBEE_OUT_PREFIX = 'VIDBEE_OUT:'
+
 function extractSavedFilePath(rawLog: string): string | undefined {
   const log = rawLog.trim()
   if (!log) return undefined
+  // Prefer the sentinel line injected via --print after_move:VIDBEE_OUT:%(filepath)s
+  // as it always contains the final post-processed path regardless of yt-dlp version.
+  const lines = log.split(/\r?\n/)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]?.trim()
+    if (line?.startsWith(VIDBEE_OUT_PREFIX)) {
+      const candidate = line.slice(VIDBEE_OUT_PREFIX.length).trim()
+      if (candidate) return candidate
+    }
+  }
+  // Fallback: parse human-readable output for older yt-dlp builds.
   const patterns = [
     /Merging formats into "([^"]+)"/g,
     /Destination:\s+"([^"]+)"/g,
@@ -600,8 +613,8 @@ function extractSavedFilePath(rawLog: string): string | undefined {
     const candidate = last?.[1]?.trim()
     if (candidate) return candidate
   }
-  const lines = log.split(/\r?\n/).reverse()
-  for (const line of lines) {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i] ?? ''
     const idx = line.indexOf('Destination:')
     if (idx >= 0) {
       const candidate = line.slice(idx + 'Destination:'.length).trim()
