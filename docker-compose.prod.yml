@@ -32,8 +32,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      skynet:
-        ipv4_address: 172.20.0.16
+      - skynet
 
 networks:
   skynet:
