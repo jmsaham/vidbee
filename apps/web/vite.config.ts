@@ -27,7 +27,7 @@ const config = defineConfig({
 		viteReact(),
 	],
 	server: {
-		allowedHosts: "all",
+		allowedHosts: true,
 		proxy: {
 			"/events": {
 				target: "http://localhost:3100",
