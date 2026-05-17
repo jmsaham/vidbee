@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 WORKDIR /app
 
-ARG VITE_API_URL=http://localhost:3100
+ARG VITE_API_URL=
 ENV VITE_API_URL=${VITE_API_URL}
 ENV API_PROXY_TARGET=http://api:3100
 
