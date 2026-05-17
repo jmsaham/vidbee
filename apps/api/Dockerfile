@@ -7,7 +7,7 @@ ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
 RUN apk add --no-cache yt-dlp ffmpeg python3 make g++
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 WORKDIR /app
 
