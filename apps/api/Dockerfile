@@ -35,14 +35,10 @@ EXPOSE 3100
 ENV VIDBEE_API_HOST=0.0.0.0
 ENV VIDBEE_API_PORT=3100
 ENV VIDBEE_DOWNLOAD_DIR=/data/downloads
-# Persistence is enabled by default so the `before-start` history migration
-# (legacy download_history → tasks) is actually visible at runtime, and so
-# crash-recovery works across container restarts. Mount /data/downloads as
-# a persistent volume in production (the Dockerfile already declares it).
-# To revert to the old stateless behavior set VIDBEE_PERSIST_QUEUE=0.
+ENV VIDBEE_DATA_DIR=/data
 ENV VIDBEE_PERSIST_QUEUE=1
 
-VOLUME ["/data/downloads"]
+VOLUME ["/data"]
 
 # `before-start` runs migrate-history.ts (legacy download_history → tasks)
 # and then boots the API. The script is idempotent so re-runs are safe.

@@ -2,7 +2,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { WebAppSettingsSchema } from '@vidbee/downloader-core'
 
-const STORAGE_DIR = path.resolve(process.cwd(), '.data')
+const STORAGE_DIR = process.env.VIDBEE_DATA_DIR
+  ? path.resolve(process.env.VIDBEE_DATA_DIR)
+  : path.resolve(process.cwd(), '.data')
 const STORAGE_FILE = path.join(STORAGE_DIR, 'web-settings.json')
 
 const defaultWebSettings = WebAppSettingsSchema.parse({

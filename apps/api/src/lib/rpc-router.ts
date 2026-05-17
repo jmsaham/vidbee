@@ -15,7 +15,10 @@ import { webSettingsStore } from './web-settings-store'
 import { fetchPlaylistInfo, fetchVideoInfo } from './yt-dlp-info'
 
 const os = implement(downloaderContract)
-const WEB_SETTINGS_FILES_DIR = path.resolve(process.cwd(), '.data', 'web-settings-files')
+const DATA_DIR = process.env.VIDBEE_DATA_DIR
+  ? path.resolve(process.env.VIDBEE_DATA_DIR)
+  : path.resolve(process.cwd(), '.data')
+const WEB_SETTINGS_FILES_DIR = path.join(DATA_DIR, 'web-settings-files')
 const MAX_WEB_SETTINGS_FILE_BYTES = 1_000_000
 const MANAGED_SETTINGS_FILE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 const SAFE_FILE_NAME_REGEX = /[^A-Za-z0-9._-]+/g

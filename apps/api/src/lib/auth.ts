@@ -5,7 +5,9 @@ import { promisify } from 'node:util'
 
 const scryptAsync = promisify(scrypt)
 
-const DATA_DIR = path.resolve(process.cwd(), '.data')
+const DATA_DIR = process.env.VIDBEE_DATA_DIR
+  ? path.resolve(process.env.VIDBEE_DATA_DIR)
+  : path.resolve(process.cwd(), '.data')
 const USERS_FILE = path.join(DATA_DIR, 'auth', 'users.json')
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000
 
