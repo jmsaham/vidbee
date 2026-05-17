@@ -492,9 +492,7 @@ export function DownloadItem({
 	const isCompletedStatus = download.status === "completed";
 	const canRetry = download.status === "error";
 	const showCopyAction = isCompletedStatus && fileExists;
-	const showOpenFolderAction = Boolean(
-		download.title && getEffectiveDownloadPath().trim(),
-	);
+	const showOpenFolderAction = false;
 	const canCopyLink = Boolean(download.url);
 	const canOpenFile = isCompletedStatus && fileExists;
 	const canDeleteFile = isCompletedStatus && fileExists;
