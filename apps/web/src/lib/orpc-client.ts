@@ -33,10 +33,26 @@ export const clearAuthToken = (): void => {
 	localStorage.removeItem(AUTH_TOKEN_KEY);
 };
 
+const redirectToLogin = (): void => {
+	clearAuthToken();
+	window.location.replace("/login");
+};
+
+// Intercept 401 responses: clear the stale token and redirect to login.
+// This handles the case where the API restarted and invalidated in-memory sessions.
+const authFetch: typeof fetch = async (input, init) => {
+	const response = await fetch(input, init);
+	if (response.status === 401 && typeof window !== "undefined") {
+		redirectToLogin();
+	}
+	return response;
+};
+
 export const orpcClient: ContractRouterClient<typeof downloaderContract> =
 	createORPCClient(
 		new RPCLink({
 			url: rpcUrl,
+			fetch: isServer ? undefined : authFetch,
 			headers: () => {
 				const token = getAuthToken();
 				return token ? { Authorization: `Bearer ${token}` } : {};

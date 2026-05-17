@@ -4,7 +4,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { i18n } from "../lib/i18n";
-import { getAuthToken } from "../lib/orpc-client";
+import { clearAuthToken, getAuthToken } from "../lib/orpc-client";
 import { applyThemeToDocument, readWebSettings } from "../lib/web-settings";
 
 import appCss from "../styles.css?url";
@@ -37,13 +37,40 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		applyThemeToDocument(settings.theme);
 		void i18n.changeLanguage(settings.language);
 
-		const token = getAuthToken();
-		if (!token && window.location.pathname !== "/login") {
-			window.location.replace("/login");
-			// Stay hidden while the browser navigates away.
-		} else {
+		// On the login page there is nothing to validate — just show it.
+		if (window.location.pathname === "/login") {
 			setAuthReady(true);
+			return;
 		}
+
+		const token = getAuthToken();
+		if (!token) {
+			window.location.replace("/login");
+			return; // Stay hidden while navigating.
+		}
+
+		// Validate the stored token against the API before revealing the page.
+		// Keeps the page hidden if the token is stale (e.g. after an API restart).
+		fetch(`${window.location.origin}/rpc/status`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+			},
+			body: "{}",
+		})
+			.then((res) => {
+				if (res.status === 401) {
+					clearAuthToken();
+					window.location.replace("/login");
+				} else {
+					setAuthReady(true);
+				}
+			})
+			.catch(() => {
+				// Network error — show the app and let it handle errors inline.
+				setAuthReady(true);
+			});
 	}, []);
 
 	return (
