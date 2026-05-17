@@ -39,3 +39,8 @@ services:
 volumes:
   vidbee-downloads:
   vidbee-data:
+
+networks:
+  default:
+    name: skynet
+    external: true
