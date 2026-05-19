@@ -58,7 +58,7 @@ import { clearAuthToken, orpcClient } from "../../lib/orpc-client";
 import type { ThemeValue, WebAppSettings } from "../../lib/web-settings";
 import { AppShell } from "../layout/app-shell";
 
-type SettingsTab = "advanced" | "cookies" | "general" | "users";
+type SettingsTab = "advanced" | "cookies" | "general" | "security" | "users";
 
 type BrowserProfileValidationReason =
 	| "browserUnsupported"
@@ -100,6 +100,12 @@ interface UserEntry {
 	id: string;
 	username: string;
 	createdAt: number;
+}
+
+interface IpBlacklistEntry {
+	ip: string;
+	reason: string;
+	blockedAt: number;
 }
 
 const validateBrowserProfile = (
@@ -189,6 +195,12 @@ export const SettingsPage = () => {
 	const [changePwUserId, setChangePwUserId] = useState<string | null>(null);
 	const [changePwValue, setChangePwValue] = useState("");
 
+	const [hasDefaultCredentials, setHasDefaultCredentials] = useState(false);
+	const [ipBlacklist, setIpBlacklist] = useState<IpBlacklistEntry[]>([]);
+	const [securityLoading, setSecurityLoading] = useState(false);
+	const [newBlockIp, setNewBlockIp] = useState("");
+	const [blockIpLoading, setBlockIpLoading] = useState(false);
+
 	const parsedBrowserCookies = parseBrowserCookiesSetting(
 		settings.browserForCookies,
 	);
@@ -231,7 +243,7 @@ export const SettingsPage = () => {
 
 		const searchParams = new URLSearchParams(window.location.search);
 		const tab = searchParams.get("tab");
-		if (tab === "general" || tab === "advanced" || tab === "cookies" || tab === "users") {
+		if (tab === "general" || tab === "advanced" || tab === "cookies" || tab === "users" || tab === "security") {
 			setActiveTab(tab);
 		}
 	}, []);
@@ -414,6 +426,53 @@ export const SettingsPage = () => {
 		void loadUsers();
 	}, [activeTab, loadUsers]);
 
+	const loadSecurityData = useCallback(async () => {
+		setSecurityLoading(true);
+		try {
+			const [statusRes, blacklistRes] = await Promise.all([
+				orpcClient.security.status(),
+				orpcClient.security.listIpBlacklist(),
+			]);
+			setHasDefaultCredentials(statusRes.hasDefaultCredentials);
+			setIpBlacklist(blacklistRes.entries);
+		} catch {
+			toast.error(t("errors.networkError"));
+		} finally {
+			setSecurityLoading(false);
+		}
+	}, [t]);
+
+	useEffect(() => {
+		if (activeTab !== "security") return;
+		void loadSecurityData();
+	}, [activeTab, loadSecurityData]);
+
+	const handleBlockIp = async () => {
+		const ip = newBlockIp.trim();
+		if (!ip) return;
+		setBlockIpLoading(true);
+		try {
+			await orpcClient.security.addToIpBlacklist({ ip });
+			setNewBlockIp("");
+			toast.success(t("security.blockIpSuccess"));
+			void loadSecurityData();
+		} catch {
+			toast.error(t("security.blockIpError"));
+		} finally {
+			setBlockIpLoading(false);
+		}
+	};
+
+	const handleUnblockIp = async (ip: string) => {
+		try {
+			await orpcClient.security.removeFromIpBlacklist({ ip });
+			toast.success(t("security.unblockSuccess"));
+			void loadSecurityData();
+		} catch {
+			toast.error(t("security.unblockError"));
+		}
+	};
+
 	const handleAddUser = async () => {
 		if (!newUsername.trim() || !newPassword.trim()) return;
 		setAddUserLoading(true);
@@ -497,6 +556,9 @@ export const SettingsPage = () => {
 							</TabsTrigger>
 							<TabsTrigger value="users">
 								{t("auth.usersTab")}
+							</TabsTrigger>
+							<TabsTrigger value="security">
+								{t("security.tab")}
 							</TabsTrigger>
 						</TabsList>
 
@@ -1301,6 +1363,83 @@ export const SettingsPage = () => {
 										</Button>
 									</ItemActions>
 								</Item>
+							</ItemGroup>
+						</TabsContent>
+
+						<TabsContent className="mt-2 space-y-4" value="security">
+							{hasDefaultCredentials && (
+								<div className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive text-sm">
+									<AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+									<span>{t("security.defaultCredentialsWarning")}</span>
+								</div>
+							)}
+
+							<ItemGroup>
+								<Item variant="muted">
+									<ItemContent>
+										<ItemTitle>{t("security.ipBlacklist")}</ItemTitle>
+										<ItemDescription>
+											{t("security.ipBlacklistDescription")}
+										</ItemDescription>
+									</ItemContent>
+									<ItemActions>
+										<div className="flex w-full max-w-md gap-2">
+											<Input
+												onChange={(e) => setNewBlockIp(e.target.value)}
+												onKeyDown={(e) => { if (e.key === "Enter") void handleBlockIp(); }}
+												placeholder={t("security.blockIpPlaceholder")}
+												value={newBlockIp}
+											/>
+											<Button
+												disabled={blockIpLoading || !newBlockIp.trim()}
+												onClick={() => void handleBlockIp()}
+											>
+												{t("security.blockIp")}
+											</Button>
+										</div>
+									</ItemActions>
+								</Item>
+
+								<ItemSeparator />
+
+								{securityLoading ? (
+									<Item variant="muted">
+										<ItemContent>
+											<ItemDescription>{t("download.loading")}</ItemDescription>
+										</ItemContent>
+									</Item>
+								) : null}
+
+								{!securityLoading && ipBlacklist.length === 0 ? (
+									<Item variant="muted">
+										<ItemContent>
+											<ItemDescription>{t("security.noBlockedIPs")}</ItemDescription>
+										</ItemContent>
+									</Item>
+								) : null}
+
+								{!securityLoading && ipBlacklist.map((entry, idx) => (
+									<div key={entry.ip}>
+										{idx > 0 && <ItemSeparator />}
+										<Item variant="muted">
+											<ItemContent>
+												<ItemTitle className="font-mono">{entry.ip}</ItemTitle>
+												<ItemDescription>
+													{t("security.reason")}: {entry.reason}
+												</ItemDescription>
+											</ItemContent>
+											<ItemActions>
+												<Button
+													onClick={() => void handleUnblockIp(entry.ip)}
+													size="sm"
+													variant="outline"
+												>
+													{t("security.unblock")}
+												</Button>
+											</ItemActions>
+										</Item>
+									</div>
+								))}
 							</ItemGroup>
 						</TabsContent>
 					</Tabs>

@@ -734,5 +734,21 @@
     "save": "Save",
     "signOut": "Sign out",
     "signOutDescription": "Sign out of your current session"
+  },
+  "security": {
+    "tab": "Security",
+    "defaultCredentialsWarning": "Default admin credentials are active. Change your password in the Users tab immediately.",
+    "ipBlacklist": "Blocked IP Addresses",
+    "ipBlacklistDescription": "IPs blocked from accessing this instance. IPs are auto-blocked after 10 failed login attempts.",
+    "noBlockedIPs": "No IP addresses are currently blocked",
+    "blockIp": "Block IP",
+    "blockIpPlaceholder": "e.g. 192.168.1.100",
+    "blockIpSuccess": "IP address blocked",
+    "blockIpError": "Failed to block IP address",
+    "unblock": "Unblock",
+    "unblockSuccess": "IP address unblocked",
+    "unblockError": "Failed to unblock IP address",
+    "reason": "Reason",
+    "blockedAt": "Blocked"
   }
 }

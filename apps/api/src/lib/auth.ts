@@ -9,25 +9,36 @@ const DATA_DIR = process.env.VIDBEE_DATA_DIR
   ? path.resolve(process.env.VIDBEE_DATA_DIR)
   : path.resolve(process.cwd(), '.data')
 const USERS_FILE = path.join(DATA_DIR, 'auth', 'users.json')
-const SESSION_EXPIRY_MS = 120 * 60 * 1000 // 120 minutes
+const IP_BLACKLIST_FILE = path.join(DATA_DIR, 'auth', 'ip-blacklist.json')
+const SESSION_EXPIRY_MS = 120 * 60 * 1000
 
 interface StoredUser {
   id: string
   username: string
   passwordHash: string
   createdAt: number
+  needsPasswordChange?: boolean
 }
 
 interface UsersStore {
   users: StoredUser[]
 }
 
+interface IpBlacklistEntry {
+  ip: string
+  reason: string
+  blockedAt: number
+}
+
+interface IpBlacklistStore {
+  entries: IpBlacklistEntry[]
+}
+
 const sessions = new Map<string, { userId: string; expiresAt: number }>()
 
-// Simple in-memory brute-force protection per username.
 const MAX_FAILED_ATTEMPTS = 10
-const LOCKOUT_MS = 15 * 60 * 1000 // 15 minutes
-const loginAttempts = new Map<string, { count: number; lockedUntil: number }>()
+const ipFailedAttempts = new Map<string, number>()
+const ipBlacklist = new Map<string, IpBlacklistEntry>()
 
 const hashPassword = async (password: string): Promise<string> => {
   const salt = randomBytes(16).toString('hex')
@@ -67,52 +78,119 @@ const writeStore = async (store: UsersStore): Promise<void> => {
   await writeFile(USERS_FILE, JSON.stringify(store, null, 2), 'utf-8')
 }
 
+const readIpBlacklistStore = async (): Promise<IpBlacklistStore> => {
+  try {
+    const content = await readFile(IP_BLACKLIST_FILE, 'utf-8')
+    return JSON.parse(content) as IpBlacklistStore
+  } catch {
+    return { entries: [] }
+  }
+}
+
+const writeIpBlacklistStore = async (): Promise<void> => {
+  await mkdir(path.dirname(IP_BLACKLIST_FILE), { recursive: true })
+  const store: IpBlacklistStore = { entries: Array.from(ipBlacklist.values()) }
+  await writeFile(IP_BLACKLIST_FILE, JSON.stringify(store, null, 2), 'utf-8')
+}
+
+export const isIpBlocked = (ip: string): boolean => {
+  return ipBlacklist.has(ip)
+}
+
+export const addToIpBlacklist = async (ip: string, reason: string): Promise<boolean> => {
+  if (ipBlacklist.has(ip)) {
+    return false
+  }
+  ipBlacklist.set(ip, { ip, reason, blockedAt: Date.now() })
+  await writeIpBlacklistStore()
+  return true
+}
+
+export const removeFromIpBlacklist = async (ip: string): Promise<boolean> => {
+  if (!ipBlacklist.has(ip)) {
+    return false
+  }
+  ipBlacklist.delete(ip)
+  await writeIpBlacklistStore()
+  return true
+}
+
+export const listIpBlacklist = (): IpBlacklistEntry[] => {
+  return Array.from(ipBlacklist.values())
+}
+
+export const hasDefaultCredentials = async (): Promise<boolean> => {
+  const store = await readStore()
+  const user = store.users[0]
+  if (!user) {
+    return false
+  }
+  return user.needsPasswordChange === true
+}
+
 export const ensureDefaultUser = async (): Promise<void> => {
+  const blacklistStore = await readIpBlacklistStore()
+  for (const entry of blacklistStore.entries) {
+    ipBlacklist.set(entry.ip, entry)
+  }
+
   const store = await readStore()
   if (store.users.length > 0) {
     return
   }
   const username = process.env.VIDBEE_ADMIN_USERNAME?.trim() || 'admin'
   const password = process.env.VIDBEE_ADMIN_PASSWORD?.trim() || 'admin'
+  const needsPasswordChange = !process.env.VIDBEE_ADMIN_PASSWORD?.trim()
   store.users.push({
     id: randomBytes(16).toString('hex'),
     username,
     passwordHash: await hashPassword(password),
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    needsPasswordChange
   })
   await writeStore(store)
 }
 
 export const login = async (
   username: string,
-  password: string
+  password: string,
+  clientIp?: string
 ): Promise<{ token: string; username: string } | null> => {
-  const key = username.trim().toLowerCase()
-
-  const attempt = loginAttempts.get(key)
-  if (attempt && attempt.lockedUntil > Date.now()) {
+  if (clientIp && isIpBlocked(clientIp)) {
     return null
   }
 
+  const key = username.trim().toLowerCase()
   const store = await readStore()
   const user = store.users.find((u) => u.username.toLowerCase() === key)
+
+  const recordFailure = async (): Promise<void> => {
+    if (!clientIp) {
+      return
+    }
+    const count = (ipFailedAttempts.get(clientIp) ?? 0) + 1
+    ipFailedAttempts.set(clientIp, count)
+    if (count >= MAX_FAILED_ATTEMPTS) {
+      await addToIpBlacklist(clientIp, `Auto-blocked after ${MAX_FAILED_ATTEMPTS} failed login attempts`)
+      ipFailedAttempts.delete(clientIp)
+    }
+  }
+
   if (!user) {
-    // Record attempt even for unknown usernames to avoid user enumeration timing.
-    const cur = loginAttempts.get(key) ?? { count: 0, lockedUntil: 0 }
-    const count = cur.count + 1
-    loginAttempts.set(key, { count, lockedUntil: count >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0 })
+    await recordFailure()
     return null
   }
 
   const valid = await verifyPassword(password, user.passwordHash)
   if (!valid) {
-    const cur = loginAttempts.get(key) ?? { count: 0, lockedUntil: 0 }
-    const count = cur.count + 1
-    loginAttempts.set(key, { count, lockedUntil: count >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0 })
+    await recordFailure()
     return null
   }
 
-  loginAttempts.delete(key)
+  if (clientIp) {
+    ipFailedAttempts.delete(clientIp)
+  }
+
   const token = randomBytes(32).toString('hex')
   sessions.set(token, { userId: user.id, expiresAt: Date.now() + SESSION_EXPIRY_MS })
   return { token, username: user.username }
@@ -179,8 +257,8 @@ export const changeUserPassword = async (userId: string, newPassword: string): P
     return false
   }
   user.passwordHash = await hashPassword(newPassword)
+  user.needsPasswordChange = false
   await writeStore(store)
-  // Invalidate all existing sessions for this user so the new password takes effect immediately.
   for (const [token, session] of sessions.entries()) {
     if (session.userId === userId) {
       sessions.delete(token)

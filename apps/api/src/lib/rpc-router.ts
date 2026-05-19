@@ -8,7 +8,7 @@ import { implement, ORPCError } from '@orpc/server'
 import type { DownloadTask } from '@vidbee/downloader-core'
 import { downloaderContract } from '@vidbee/downloader-core'
 import type { Task, TaskStatus } from '@vidbee/task-queue'
-import { changeUserPassword, createUser, listUsers, login, removeUser } from './auth'
+import { addToIpBlacklist, changeUserPassword, createUser, hasDefaultCredentials, listIpBlacklist, listUsers, login, removeFromIpBlacklist, removeUser } from './auth'
 import { taskQueue, taskQueueExecutor } from './downloader'
 import { projectTaskForApi } from './projection'
 import { webSettingsStore } from './web-settings-store'
@@ -626,8 +626,9 @@ export const rpcRouter = os.router({
   },
 
   auth: {
-    login: os.auth.login.handler(async ({ input }) => {
-      const result = await login(input.username, input.password)
+    login: os.auth.login.handler(async ({ input, context }) => {
+      const clientIp = (context as { clientIp?: string } | undefined)?.clientIp
+      const result = await login(input.username, input.password, clientIp)
       if (!result) {
         throw new ORPCError('UNAUTHORIZED', { message: 'Invalid username or password.' })
       }
@@ -681,6 +682,23 @@ export const rpcRouter = os.router({
           message: toErrorMessage(error, 'Failed to change password.')
         })
       }
+    })
+  },
+
+  security: {
+    status: os.security.status.handler(async () => {
+      return { hasDefaultCredentials: await hasDefaultCredentials() }
+    }),
+    listIpBlacklist: os.security.listIpBlacklist.handler(async () => {
+      return { entries: listIpBlacklist() }
+    }),
+    addToIpBlacklist: os.security.addToIpBlacklist.handler(async ({ input }) => {
+      const added = await addToIpBlacklist(input.ip, input.reason ?? 'Manually blocked by admin')
+      return { added }
+    }),
+    removeFromIpBlacklist: os.security.removeFromIpBlacklist.handler(async ({ input }) => {
+      const removed = await removeFromIpBlacklist(input.ip)
+      return { removed }
     })
   }
 })

@@ -1,5 +1,7 @@
 import { oc } from '@orpc/contract'
 import {
+  AddToIpBlacklistInputSchema,
+  AddToIpBlacklistOutputSchema,
   AuthLoginInputSchema,
   AuthLoginOutputSchema,
   CancelDownloadInputSchema,
@@ -17,16 +19,20 @@ import {
   ListDirectoriesOutputSchema,
   ListDownloadsOutputSchema,
   ListHistoryOutputSchema,
+  ListIpBlacklistOutputSchema,
   ListUsersOutputSchema,
   PlaylistDownloadInputSchema,
   PlaylistDownloadOutputSchema,
   PlaylistInfoInputSchema,
   PlaylistInfoOutputSchema,
+  RemoveFromIpBlacklistInputSchema,
+  RemoveFromIpBlacklistOutputSchema,
   RemoveHistoryByPlaylistInputSchema,
   RemoveHistoryItemsInputSchema,
   RemoveHistoryOutputSchema,
   RemoveUserInputSchema,
   RemoveUserOutputSchema,
+  SecurityStatusOutputSchema,
   SetWebSettingsInputSchema,
   StatusOutputSchema,
   GetWebSettingsOutputSchema,
@@ -82,5 +88,11 @@ export const downloaderContract = {
     create: oc.input(CreateUserInputSchema).output(CreateUserOutputSchema),
     remove: oc.input(RemoveUserInputSchema).output(RemoveUserOutputSchema),
     changePassword: oc.input(ChangePasswordInputSchema).output(ChangePasswordOutputSchema)
+  },
+  security: {
+    status: oc.output(SecurityStatusOutputSchema),
+    listIpBlacklist: oc.output(ListIpBlacklistOutputSchema),
+    addToIpBlacklist: oc.input(AddToIpBlacklistInputSchema).output(AddToIpBlacklistOutputSchema),
+    removeFromIpBlacklist: oc.input(RemoveFromIpBlacklistInputSchema).output(RemoveFromIpBlacklistOutputSchema),
   }
 }

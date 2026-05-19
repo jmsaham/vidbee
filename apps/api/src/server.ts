@@ -124,12 +124,20 @@ export const createApiServer = async () => {
 
   const fastify = Fastify({
     logger: true,
-    disableRequestLogging: isDev
+    disableRequestLogging: isDev,
+    trustProxy: true
   })
 
+  const allowedOrigin = process.env.VIDBEE_ALLOWED_ORIGIN?.trim()
   await fastify.register(cors, {
-    origin: true,
+    origin: allowedOrigin ? [allowedOrigin] : true,
     methods: ['GET', 'POST', 'OPTIONS']
+  })
+
+  fastify.addHook('onSend', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('X-Frame-Options', 'DENY')
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
   })
 
   const rpcHandler = new RPCHandler(rpcRouter)
@@ -189,7 +197,12 @@ export const createApiServer = async () => {
     return { ok: true }
   })
 
-  fastify.get<{ Querystring: { url?: string } }>('/images/proxy', async (request, reply) => {
+  fastify.get<{ Querystring: { url?: string; token?: string } }>('/images/proxy', async (request, reply) => {
+    const queryToken = request.query.token?.trim()
+    if (!queryToken || !validateToken(queryToken)) {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+
     const sourceUrl = request.query.url?.trim()
     if (!sourceUrl) {
       return reply.code(400).send({ message: 'Missing url query parameter.' })
@@ -415,23 +428,25 @@ export const createApiServer = async () => {
 
   fastify.all('/rpc/subscriptions/*', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await subscriptionsRpcHandler.handle(request, reply, {
-      prefix: '/rpc/subscriptions'
+      prefix: '/rpc/subscriptions',
+      context: { clientIp: request.ip }
     })
   })
 
   fastify.all('/rpc/*', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await rpcHandler.handle(request, reply, {
-      prefix: '/rpc'
+      prefix: '/rpc',
+      context: { clientIp: request.ip }
     })
   })
 
-  fastify.all('/docs', async (request, reply) => {
+  fastify.all('/docs', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await openApiHandler.handle(request, reply, {
       prefix: '/'
     })
   })
 
-  fastify.all('/openapi.json', async (request, reply) => {
+  fastify.all('/openapi.json', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await openApiHandler.handle(request, reply, {
       prefix: '/'
     })

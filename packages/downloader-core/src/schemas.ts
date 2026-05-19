@@ -406,3 +406,34 @@ export const ChangePasswordInputSchema = z.object({
 export const ChangePasswordOutputSchema = z.object({
   ok: z.boolean()
 })
+
+export const SecurityStatusOutputSchema = z.object({
+  hasDefaultCredentials: z.boolean()
+})
+
+export const IpBlacklistEntrySchema = z.object({
+  ip: z.string(),
+  reason: z.string(),
+  blockedAt: z.number()
+})
+
+export const ListIpBlacklistOutputSchema = z.object({
+  entries: z.array(IpBlacklistEntrySchema)
+})
+
+export const AddToIpBlacklistInputSchema = z.object({
+  ip: z.string().min(1),
+  reason: z.string().optional()
+})
+
+export const AddToIpBlacklistOutputSchema = z.object({
+  added: z.boolean()
+})
+
+export const RemoveFromIpBlacklistInputSchema = z.object({
+  ip: z.string().min(1)
+})
+
+export const RemoveFromIpBlacklistOutputSchema = z.object({
+  removed: z.boolean()
+})
