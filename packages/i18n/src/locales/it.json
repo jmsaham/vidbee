@@ -324,7 +324,8 @@
     "preferences": "Preferenze",
     "supportedSites": "Siti Supportati",
     "tools": "Strumenti",
-    "theme": "Tema:"
+    "theme": "Tema:",
+    "library": "Library"
   },
   "notifications": {
     "copyFailed": "Errore nella copia negli appunti",
@@ -750,5 +751,16 @@
     "unblockError": "Failed to unblock IP address",
     "reason": "Reason",
     "blockedAt": "Blocked"
+  },
+  "library": {
+    "title": "Library",
+    "loading": "Loading...",
+    "noItems": "No completed downloads yet. Start downloading to build your library.",
+    "filterAll": "All",
+    "filterVideo": "Video",
+    "filterAudio": "Audio",
+    "download": "Download to device",
+    "fileNotFound": "File not found on server",
+    "watchNow": "Watch"
   }
 }
