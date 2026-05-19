@@ -1,11 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
 	AppSidebar,
+	type AppSidebarIcon,
 	type AppSidebarItem,
 } from "@vidbee/ui/components/ui/app-sidebar";
 import { appSidebarIcons } from "@vidbee/ui/components/ui/app-sidebar-icons";
+import { LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { clearAuthToken } from "../../lib/orpc-client";
 
 type AppPage = "about" | "download" | "settings";
 
@@ -13,6 +16,15 @@ interface AppShellProps {
 	children: ReactNode;
 	page: AppPage;
 }
+
+const LogOutIconComponent = ({ className }: { className?: string }) => (
+	<LogOut className={className} />
+);
+
+const logoutIcon: AppSidebarIcon = {
+	active: LogOutIconComponent,
+	inactive: LogOutIconComponent,
+};
 
 export const AppShell = ({ children, page }: AppShellProps) => {
 	const { t } = useTranslation();
@@ -24,6 +36,11 @@ export const AppShell = ({ children, page }: AppShellProps) => {
 			"_blank",
 			"noopener,noreferrer",
 		);
+	};
+
+	const handleLogout = () => {
+		clearAuthToken();
+		window.location.href = "/login";
 	};
 
 	const items: AppSidebarItem[] = [
@@ -72,6 +89,14 @@ export const AppShell = ({ children, page }: AppShellProps) => {
 			},
 			showLabel: false,
 			showTooltip: true,
+		},
+		{
+			id: "logout",
+			icon: logoutIcon,
+			label: t("auth.signOut"),
+			showLabel: false,
+			showTooltip: true,
+			onClick: handleLogout,
 		},
 	];
 

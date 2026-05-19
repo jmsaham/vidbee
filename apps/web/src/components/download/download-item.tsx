@@ -62,7 +62,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { orpcClient } from "../../lib/orpc-client";
+import { getAuthToken, orpcClient } from "../../lib/orpc-client";
 import { resolveImageProxyUrl } from "../../lib/remote-image-proxy";
 import { readWebSettings } from "../../lib/web-settings";
 import type { DownloadRecord } from "./types";
@@ -1251,7 +1251,7 @@ export function DownloadItem({
 						className="max-h-[80vh] w-full"
 						controls
 						key={playerFilePath}
-						src={`/files/stream?path=${encodeURIComponent(playerFilePath)}`}
+						src={`/files/stream?path=${encodeURIComponent(playerFilePath)}&token=${encodeURIComponent(getAuthToken() ?? '')}`}
 					>
 						<track kind="captions" />
 					</video>

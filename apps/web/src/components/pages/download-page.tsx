@@ -23,7 +23,7 @@ import { cn } from "@vidbee/ui/lib/cn";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { eventsUrl, orpcClient } from "../../lib/orpc-client";
+import { getEventsUrl, orpcClient } from "../../lib/orpc-client";
 import { readOrpcDownloadSettings } from "../../lib/orpc-download-settings";
 import { readWebSettings } from "../../lib/web-settings";
 import { DownloadDialog } from "../download/download-dialog";
@@ -133,7 +133,7 @@ export const DownloadPage = () => {
 			return;
 		}
 
-		const source = new EventSource(eventsUrl);
+		const source = new EventSource(getEventsUrl());
 		const onChanged = () => {
 			void refreshData();
 		};

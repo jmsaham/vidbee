@@ -15,7 +15,12 @@ export const apiUrl = isServer
 	? (normalizedApiUrl || "http://localhost:3000")
 	: window.location.origin;
 
-export const eventsUrl = `${apiUrl}/events`;
+// EventSource cannot send Authorization headers; auth token is passed as ?token=.
+export const getEventsUrl = (): string => {
+	const token = getAuthToken();
+	const base = `${apiUrl}/events`;
+	return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+};
 const rpcUrl = `${apiUrl}/rpc`;
 
 const AUTH_TOKEN_KEY = "vidbee-auth-token";

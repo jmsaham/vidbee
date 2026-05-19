@@ -383,7 +383,7 @@ export const ListUsersOutputSchema = z.object({
 
 export const CreateUserInputSchema = z.object({
   username: z.string().min(1).max(64),
-  password: z.string().min(4).max(128)
+  password: z.string().min(8).max(128)
 })
 
 export const CreateUserOutputSchema = z.object({
@@ -400,7 +400,7 @@ export const RemoveUserOutputSchema = z.object({
 
 export const ChangePasswordInputSchema = z.object({
   id: z.string().min(1),
-  password: z.string().min(4).max(128)
+  password: z.string().min(8).max(128)
 })
 
 export const ChangePasswordOutputSchema = z.object({

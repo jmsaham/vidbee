@@ -9,7 +9,7 @@ const DATA_DIR = process.env.VIDBEE_DATA_DIR
   ? path.resolve(process.env.VIDBEE_DATA_DIR)
   : path.resolve(process.cwd(), '.data')
 const USERS_FILE = path.join(DATA_DIR, 'auth', 'users.json')
-const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000
+const SESSION_EXPIRY_MS = 120 * 60 * 1000 // 120 minutes
 
 interface StoredUser {
   id: string
@@ -23,6 +23,11 @@ interface UsersStore {
 }
 
 const sessions = new Map<string, { userId: string; expiresAt: number }>()
+
+// Simple in-memory brute-force protection per username.
+const MAX_FAILED_ATTEMPTS = 10
+const LOCKOUT_MS = 15 * 60 * 1000 // 15 minutes
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>()
 
 const hashPassword = async (password: string): Promise<string> => {
   const salt = randomBytes(16).toString('hex')
@@ -82,15 +87,32 @@ export const login = async (
   username: string,
   password: string
 ): Promise<{ token: string; username: string } | null> => {
-  const store = await readStore()
-  const user = store.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase())
-  if (!user) {
+  const key = username.trim().toLowerCase()
+
+  const attempt = loginAttempts.get(key)
+  if (attempt && attempt.lockedUntil > Date.now()) {
     return null
   }
+
+  const store = await readStore()
+  const user = store.users.find((u) => u.username.toLowerCase() === key)
+  if (!user) {
+    // Record attempt even for unknown usernames to avoid user enumeration timing.
+    const cur = loginAttempts.get(key) ?? { count: 0, lockedUntil: 0 }
+    const count = cur.count + 1
+    loginAttempts.set(key, { count, lockedUntil: count >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0 })
+    return null
+  }
+
   const valid = await verifyPassword(password, user.passwordHash)
   if (!valid) {
+    const cur = loginAttempts.get(key) ?? { count: 0, lockedUntil: 0 }
+    const count = cur.count + 1
+    loginAttempts.set(key, { count, lockedUntil: count >= MAX_FAILED_ATTEMPTS ? Date.now() + LOCKOUT_MS : 0 })
     return null
   }
+
+  loginAttempts.delete(key)
   const token = randomBytes(32).toString('hex')
   sessions.set(token, { userId: user.id, expiresAt: Date.now() + SESSION_EXPIRY_MS })
   return { token, username: user.username }
@@ -158,6 +180,12 @@ export const changeUserPassword = async (userId: string, newPassword: string): P
   }
   user.passwordHash = await hashPassword(newPassword)
   await writeStore(store)
+  // Invalidate all existing sessions for this user so the new password takes effect immediately.
+  for (const [token, session] of sessions.entries()) {
+    if (session.userId === userId) {
+      sessions.delete(token)
+    }
+  }
   return true
 }
 

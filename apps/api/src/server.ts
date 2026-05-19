@@ -315,7 +315,12 @@ export const createApiServer = async () => {
     '.aac': 'audio/aac'
   }
 
-  fastify.get<{ Querystring: { path?: string } }>('/files/stream', async (request, reply) => {
+  fastify.get<{ Querystring: { path?: string; token?: string } }>('/files/stream', async (request, reply) => {
+    const queryToken = request.query.token?.trim()
+    if (!queryToken || !validateToken(queryToken)) {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+
     const filePath = request.query.path?.trim()
     if (!filePath) {
       return reply.code(400).send({ message: 'Missing path parameter.' })
@@ -363,7 +368,13 @@ export const createApiServer = async () => {
     return reply.send(createReadStream(resolved))
   })
 
-  fastify.get('/events', async (request, reply) => {
+  fastify.get<{ Querystring: { token?: string } }>('/events', async (request, reply) => {
+    // EventSource cannot send Authorization headers, so auth uses a query param token.
+    const queryToken = request.query.token?.trim()
+    if (!queryToken || !validateToken(queryToken)) {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+
     const requestOrigin = request.headers.origin?.trim()
     const responseHeaders: Record<string, string> = {
       'Content-Type': 'text/event-stream',
