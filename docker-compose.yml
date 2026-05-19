@@ -22,7 +22,7 @@ services:
       start_period: 10s
     restart: unless-stopped
     networks:
-      default:
+      skynet:
         ipv4_address: 172.20.0.16
 
   web:
@@ -39,7 +39,7 @@ services:
       - "${VIDBEE_WEB_PORT:-3000}:3000"
     restart: unless-stopped
     networks:
-      default:
+      skynet:
         ipv4_address: 172.20.0.17
 
 volumes:
@@ -47,6 +47,5 @@ volumes:
   vidbee-data:
 
 networks:
-  default:
-    name: skynet
+  skynet:
     external: true
