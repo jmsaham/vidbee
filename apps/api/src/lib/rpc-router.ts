@@ -5,17 +5,20 @@ import { access, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { implement, ORPCError } from '@orpc/server'
-import { downloaderContract } from '@vidbee/downloader-core'
 import type { DownloadTask } from '@vidbee/downloader-core'
+import { downloaderContract } from '@vidbee/downloader-core'
 import type { Task, TaskStatus } from '@vidbee/task-queue'
-
-import { projectTaskForApi } from './projection'
+import { addToIpBlacklist, changeUserPassword, createUser, hasDefaultCredentials, listIpBlacklist, listUsers, login, removeFromIpBlacklist, removeUser } from './auth'
 import { taskQueue, taskQueueExecutor } from './downloader'
+import { projectTaskForApi } from './projection'
 import { webSettingsStore } from './web-settings-store'
 import { fetchPlaylistInfo, fetchVideoInfo } from './yt-dlp-info'
 
 const os = implement(downloaderContract)
-const WEB_SETTINGS_FILES_DIR = path.resolve(process.cwd(), '.data', 'web-settings-files')
+const DATA_DIR = process.env.VIDBEE_DATA_DIR
+  ? path.resolve(process.env.VIDBEE_DATA_DIR)
+  : path.resolve(process.cwd(), '.data')
+const WEB_SETTINGS_FILES_DIR = path.join(DATA_DIR, 'web-settings-files')
 const MAX_WEB_SETTINGS_FILE_BYTES = 1_000_000
 const MANAGED_SETTINGS_FILE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 const SAFE_FILE_NAME_REGEX = /[^A-Za-z0-9._-]+/g
@@ -64,14 +67,22 @@ const isPathWithinBase = (basePath: string, targetPath: string): boolean => {
 }
 
 const openFileWithSystem = async (targetPath: string): Promise<boolean> => {
-  if (process.platform === 'darwin') return runProcess('open', [targetPath])
-  if (process.platform === 'win32') return runProcess('cmd', ['/c', 'start', '', targetPath])
+  if (process.platform === 'darwin') {
+    return runProcess('open', [targetPath])
+  }
+  if (process.platform === 'win32') {
+    return runProcess('cmd', ['/c', 'start', '', targetPath])
+  }
   return runProcess('xdg-open', [targetPath])
 }
 
 const openFileLocationWithSystem = async (targetPath: string): Promise<boolean> => {
-  if (process.platform === 'darwin') return runProcess('open', ['-R', targetPath])
-  if (process.platform === 'win32') return runProcess('explorer', [`/select,${targetPath}`])
+  if (process.platform === 'darwin') {
+    return runProcess('open', ['-R', targetPath])
+  }
+  if (process.platform === 'win32') {
+    return runProcess('explorer', [`/select,${targetPath}`])
+  }
   return runProcess('xdg-open', [path.dirname(targetPath)])
 }
 
@@ -128,7 +139,9 @@ const sanitizeUploadedFileName = (fileName: string, fallbackFileName: string): s
     .replace(SAFE_FILE_NAME_REGEX, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-  if (!normalized) return fallbackFileName
+  if (!normalized) {
+    return fallbackFileName
+  }
   return normalized.slice(0, 120)
 }
 
@@ -159,10 +172,14 @@ const resolveManagedSettingsFilePath = (
   kind: ManagedSettingsFileKind
 ): string | null => {
   const trimmedPath = rawPath.trim()
-  if (!trimmedPath) return null
+  if (!trimmedPath) {
+    return null
+  }
   const resolvedPath = path.resolve(trimmedPath)
   const managedDirectory = path.join(WEB_SETTINGS_FILES_DIR, kind)
-  if (!isPathWithinBase(managedDirectory, resolvedPath)) return null
+  if (!isPathWithinBase(managedDirectory, resolvedPath)) {
+    return null
+  }
   return resolvedPath
 }
 
@@ -174,7 +191,9 @@ const pruneManagedSettingsFiles = async (
   const keepPaths = new Set<string>()
   for (const rawPath of referencedPaths) {
     const managedPath = resolveManagedSettingsFilePath(rawPath, kind)
-    if (managedPath) keepPaths.add(managedPath)
+    if (managedPath) {
+      keepPaths.add(managedPath)
+    }
   }
   let entries: { isFile: () => boolean; name: string }[] = []
   try {
@@ -184,12 +203,18 @@ const pruneManagedSettingsFiles = async (
   }
   const now = Date.now()
   for (const entry of entries) {
-    if (!entry.isFile()) continue
+    if (!entry.isFile()) {
+      continue
+    }
     const candidatePath = path.resolve(path.join(managedDirectory, entry.name))
-    if (keepPaths.has(candidatePath)) continue
+    if (keepPaths.has(candidatePath)) {
+      continue
+    }
     try {
       const candidateInfo = await stat(candidatePath)
-      if (now - candidateInfo.mtimeMs < MANAGED_SETTINGS_FILE_RETENTION_MS) continue
+      if (now - candidateInfo.mtimeMs < MANAGED_SETTINGS_FILE_RETENTION_MS) {
+        continue
+      }
       await rm(candidatePath, { force: true })
     } catch {
       // Ignore cleanup errors to keep upload and settings updates resilient.
@@ -222,13 +247,13 @@ const listTasksByStatuses = (statuses: ReadonlySet<TaskStatus>): DownloadTask[] 
   do {
     const page = taskQueue.list({ limit: 200, cursor })
     for (const t of page.tasks) {
-      if (statuses.has(t.status)) tasks.push(t)
+      if (statuses.has(t.status)) {
+        tasks.push(t)
+      }
     }
     cursor = page.nextCursor
   } while (cursor)
-  return tasks
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map(projectTask)
+  return tasks.sort((a, b) => b.createdAt - a.createdAt).map(projectTask)
 }
 
 export const rpcRouter = os.router({
@@ -413,7 +438,9 @@ export const rpcRouter = os.router({
     cancel: os.downloads.cancel.handler(async ({ input }) => {
       try {
         const task = taskQueue.get(input.id)
-        if (!task) return { cancelled: false }
+        if (!task) {
+          return { cancelled: false }
+        }
         await taskQueue.cancel(input.id)
         return { cancelled: true }
       } catch (error) {
@@ -432,9 +459,13 @@ export const rpcRouter = os.router({
       let removed = 0
       for (const rawId of input.ids) {
         const id = rawId.trim()
-        if (!id) continue
+        if (!id) {
+          continue
+        }
         const task = taskQueue.get(id)
-        if (!task) continue
+        if (!task) {
+          continue
+        }
         try {
           await taskQueue.removeFromHistory(id)
           removed += 1
@@ -446,7 +477,9 @@ export const rpcRouter = os.router({
     }),
     removeByPlaylist: os.history.removeByPlaylist.handler(async ({ input }) => {
       const playlistId = input.playlistId.trim()
-      if (!playlistId) return { removed: 0 }
+      if (!playlistId) {
+        return { removed: 0 }
+      }
       let removed = 0
       let cursor: string | null = null
       do {
@@ -491,7 +524,9 @@ export const rpcRouter = os.router({
       try {
         const resolvedPath = path.resolve(input.path)
         const exists = await pathExists(resolvedPath)
-        if (!exists) return { success: false }
+        if (!exists) {
+          return { success: false }
+        }
         return { success: await openFileWithSystem(resolvedPath) }
       } catch (error) {
         throw new ORPCError('INTERNAL_SERVER_ERROR', {
@@ -503,7 +538,9 @@ export const rpcRouter = os.router({
       try {
         const resolvedPath = path.resolve(input.path)
         const exists = await pathExists(resolvedPath)
-        if (!exists) return { success: false }
+        if (!exists) {
+          return { success: false }
+        }
         return { success: await openFileLocationWithSystem(resolvedPath) }
       } catch (error) {
         throw new ORPCError('INTERNAL_SERVER_ERROR', {
@@ -515,7 +552,9 @@ export const rpcRouter = os.router({
       try {
         const resolvedPath = path.resolve(input.path)
         const exists = await pathExists(resolvedPath)
-        if (!exists) return { success: false }
+        if (!exists) {
+          return { success: false }
+        }
         return { success: await copyFileToClipboardWithSystem(resolvedPath) }
       } catch (error) {
         throw new ORPCError('INTERNAL_SERVER_ERROR', {
@@ -539,7 +578,9 @@ export const rpcRouter = os.router({
           })
         }
         const exists = await pathExists(resolvedPath)
-        if (!exists) return { success: false }
+        if (!exists) {
+          return { success: false }
+        }
         await rm(resolvedPath)
         return { success: true }
       } catch (error) {
@@ -581,6 +622,83 @@ export const rpcRouter = os.router({
           message: toErrorMessage(error, 'Failed to save settings.')
         })
       }
+    })
+  },
+
+  auth: {
+    login: os.auth.login.handler(async ({ input, context }) => {
+      const clientIp = (context as { clientIp?: string } | undefined)?.clientIp
+      const result = await login(input.username, input.password, clientIp)
+      if (!result) {
+        throw new ORPCError('UNAUTHORIZED', { message: 'Invalid username or password.' })
+      }
+      return result
+    })
+  },
+
+  users: {
+    list: os.users.list.handler(async () => {
+      try {
+        const users = await listUsers()
+        return { users }
+      } catch (error) {
+        throw new ORPCError('INTERNAL_SERVER_ERROR', {
+          message: toErrorMessage(error, 'Failed to list users.')
+        })
+      }
+    }),
+    create: os.users.create.handler(async ({ input }) => {
+      try {
+        const user = await createUser(input.username, input.password)
+        if (!user) {
+          throw new ORPCError('CONFLICT', { message: 'Username already exists.' })
+        }
+        return { user }
+      } catch (error) {
+        if (error instanceof ORPCError) {
+          throw error
+        }
+        throw new ORPCError('INTERNAL_SERVER_ERROR', {
+          message: toErrorMessage(error, 'Failed to create user.')
+        })
+      }
+    }),
+    remove: os.users.remove.handler(async ({ input }) => {
+      try {
+        const removed = await removeUser(input.id)
+        return { removed }
+      } catch (error) {
+        throw new ORPCError('INTERNAL_SERVER_ERROR', {
+          message: toErrorMessage(error, 'Failed to remove user.')
+        })
+      }
+    }),
+    changePassword: os.users.changePassword.handler(async ({ input }) => {
+      try {
+        const ok = await changeUserPassword(input.id, input.password)
+        return { ok }
+      } catch (error) {
+        throw new ORPCError('INTERNAL_SERVER_ERROR', {
+          message: toErrorMessage(error, 'Failed to change password.')
+        })
+      }
+    })
+  },
+
+  security: {
+    status: os.security.status.handler(async () => {
+      return { hasDefaultCredentials: await hasDefaultCredentials() }
+    }),
+    listIpBlacklist: os.security.listIpBlacklist.handler(async () => {
+      return { entries: listIpBlacklist() }
+    }),
+    addToIpBlacklist: os.security.addToIpBlacklist.handler(async ({ input }) => {
+      const added = await addToIpBlacklist(input.ip, input.reason ?? 'Manually blocked by admin')
+      return { added }
+    }),
+    removeFromIpBlacklist: os.security.removeFromIpBlacklist.handler(async ({ input }) => {
+      const removed = await removeFromIpBlacklist(input.ip)
+      return { removed }
     })
   }
 })

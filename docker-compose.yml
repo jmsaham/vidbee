@@ -1,5 +1,6 @@
 services:
   api:
+    container_name: vidbee-api
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -20,20 +21,31 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    networks:
+      skynet:
+        ipv4_address: 172.20.0.16
 
   web:
+    container_name: vidbee-web
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:${VIDBEE_API_PORT:-3100}}
+        VITE_API_URL: ${VITE_API_URL:-http://vidbee-api:${VIDBEE_API_PORT:-3100}}
     depends_on:
       api:
         condition: service_healthy
     ports:
       - "${VIDBEE_WEB_PORT:-3000}:3000"
     restart: unless-stopped
+    networks:
+      skynet:
+        ipv4_address: 172.20.0.17
 
 volumes:
   vidbee-downloads:
   vidbee-data:
+
+networks:
+  skynet:
+    external: true

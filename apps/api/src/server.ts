@@ -1,12 +1,15 @@
 import { lookup } from 'node:dns/promises'
+import { createReadStream, statSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 import net from 'node:net'
+import path from 'node:path'
 import cors from '@fastify/cors'
 import { OpenAPIHandler } from '@orpc/openapi/fastify'
 import { OpenAPIReferencePlugin } from '@orpc/openapi/plugins'
 import { RPCHandler } from '@orpc/server/fastify'
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
-import Fastify from 'fastify'
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
+import { ensureDefaultUser, extractBearerToken, validateToken } from './lib/auth'
 import { startTaskQueue, stopTaskQueue, taskQueue } from './lib/downloader'
 import { projectTaskForApi } from './lib/projection'
 import { rpcRouter } from './lib/rpc-router'
@@ -105,19 +108,36 @@ const parseRemoteImageUrl = (value: string): URL | null => {
   }
 }
 
+const isRpcAuthRequired = (url: string): boolean => {
+  if (!url.startsWith('/rpc/')) {
+    return false
+  }
+  const path = url.split('?')[0]
+  return path !== '/rpc/auth/login'
+}
+
 export const createApiServer = async () => {
   await startTaskQueue()
   await startApiSubscriptions()
+  await ensureDefaultUser()
   const isDev = process.env.NODE_ENV !== 'production'
 
   const fastify = Fastify({
     logger: true,
-    disableRequestLogging: isDev
+    disableRequestLogging: isDev,
+    trustProxy: true
   })
 
+  const allowedOrigin = process.env.VIDBEE_ALLOWED_ORIGIN?.trim()
   await fastify.register(cors, {
-    origin: true,
+    origin: allowedOrigin ? [allowedOrigin] : true,
     methods: ['GET', 'POST', 'OPTIONS']
+  })
+
+  fastify.addHook('onSend', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff')
+    reply.header('X-Frame-Options', 'DENY')
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
   })
 
   const rpcHandler = new RPCHandler(rpcRouter)
@@ -163,7 +183,9 @@ export const createApiServer = async () => {
   })
   taskQueue.on('progress', (e) => {
     const t = taskQueue.get(e.taskId)
-    if (t) sseHub.publish('task-updated', { task: projectTaskForApi(t) })
+    if (t) {
+      sseHub.publish('task-updated', { task: projectTaskForApi(t) })
+    }
   })
   taskQueue.on('transition', (e) => {
     if (e.to === 'queued' || e.to === 'cancelled' || e.to === 'completed' || e.to === 'failed') {
@@ -175,7 +197,12 @@ export const createApiServer = async () => {
     return { ok: true }
   })
 
-  fastify.get<{ Querystring: { url?: string } }>('/images/proxy', async (request, reply) => {
+  fastify.get<{ Querystring: { url?: string; token?: string } }>('/images/proxy', async (request, reply) => {
+    const queryToken = request.query.token?.trim()
+    if (!queryToken || !validateToken(queryToken)) {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+
     const sourceUrl = request.query.url?.trim()
     if (!sourceUrl) {
       return reply.code(400).send({ message: 'Missing url query parameter.' })
@@ -285,7 +312,82 @@ export const createApiServer = async () => {
     return reply.send(imageBuffer)
   })
 
-  fastify.get('/events', async (request, reply) => {
+  const STREAM_MIME_TYPES: Record<string, string> = {
+    '.mp4': 'video/mp4',
+    '.mkv': 'video/x-matroska',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime',
+    '.m4v': 'video/mp4',
+    '.mp3': 'audio/mpeg',
+    '.m4a': 'audio/mp4',
+    '.ogg': 'audio/ogg',
+    '.opus': 'audio/opus',
+    '.wav': 'audio/wav',
+    '.flac': 'audio/flac',
+    '.aac': 'audio/aac'
+  }
+
+  fastify.get<{ Querystring: { path?: string; token?: string } }>('/files/stream', async (request, reply) => {
+    const queryToken = request.query.token?.trim()
+    if (!queryToken || !validateToken(queryToken)) {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+
+    const filePath = request.query.path?.trim()
+    if (!filePath) {
+      return reply.code(400).send({ message: 'Missing path parameter.' })
+    }
+
+    const resolved = path.resolve(filePath)
+    const downloadDir = path.resolve(process.env.VIDBEE_DOWNLOAD_DIR ?? '/data/downloads')
+    if (resolved !== downloadDir && !resolved.startsWith(downloadDir + path.sep)) {
+      return reply.code(403).send({ message: 'Access denied.' })
+    }
+
+    let stat: ReturnType<typeof statSync>
+    try {
+      stat = statSync(resolved)
+      if (!stat.isFile()) {
+        return reply.code(404).send({ message: 'Not a file.' })
+      }
+    } catch {
+      return reply.code(404).send({ message: 'File not found.' })
+    }
+
+    const contentType =
+      STREAM_MIME_TYPES[path.extname(resolved).toLowerCase()] ?? 'application/octet-stream'
+    const fileSize = stat.size
+    const rangeHeader = request.headers.range
+
+    if (rangeHeader) {
+      const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-')
+      const start = Number.parseInt(startStr ?? '0', 10)
+      const end = endStr ? Number.parseInt(endStr, 10) : fileSize - 1
+      const chunkSize = end - start + 1
+      reply
+        .code(206)
+        .header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+        .header('Accept-Ranges', 'bytes')
+        .header('Content-Length', String(chunkSize))
+        .header('Content-Type', contentType)
+      return reply.send(createReadStream(resolved, { start, end }))
+    }
+
+    reply
+      .header('Content-Length', String(fileSize))
+      .header('Content-Type', contentType)
+      .header('Accept-Ranges', 'bytes')
+    return reply.send(createReadStream(resolved))
+  })
+
+  fastify.get<{ Querystring: { token?: string } }>('/events', async (request, reply) => {
+    // EventSource cannot send Authorization headers, so auth uses a query param token.
+    const queryToken = request.query.token?.trim()
+    if (!queryToken || !validateToken(queryToken)) {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+
     const requestOrigin = request.headers.origin?.trim()
     const responseHeaders: Record<string, string> = {
       'Content-Type': 'text/event-stream',
@@ -314,25 +416,37 @@ export const createApiServer = async () => {
   // mirrors `subscriptionContract` 1:1 (NEX-132). The match runs before the
   // generic `/rpc/*` handler because Fastify applies the most-specific route
   // wins rule for `/rpc/subscriptions/*`.
-  fastify.all('/rpc/subscriptions/*', async (request, reply) => {
+  const rpcAuthPreHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!isRpcAuthRequired(request.url)) {
+      return
+    }
+    const token = extractBearerToken(request.headers.authorization)
+    if (!(token && validateToken(token))) {
+      await reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Authentication required.' })
+    }
+  }
+
+  fastify.all('/rpc/subscriptions/*', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await subscriptionsRpcHandler.handle(request, reply, {
-      prefix: '/rpc/subscriptions'
+      prefix: '/rpc/subscriptions',
+      context: { clientIp: request.ip }
     })
   })
 
-  fastify.all('/rpc/*', async (request, reply) => {
+  fastify.all('/rpc/*', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await rpcHandler.handle(request, reply, {
-      prefix: '/rpc'
+      prefix: '/rpc',
+      context: { clientIp: request.ip }
     })
   })
 
-  fastify.all('/docs', async (request, reply) => {
+  fastify.all('/docs', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await openApiHandler.handle(request, reply, {
       prefix: '/'
     })
   })
 
-  fastify.all('/openapi.json', async (request, reply) => {
+  fastify.all('/openapi.json', { preHandler: rpcAuthPreHandler }, async (request, reply) => {
     await openApiHandler.handle(request, reply, {
       prefix: '/'
     })

@@ -27,17 +27,22 @@ const config = defineConfig({
 		viteReact(),
 	],
 	server: {
+		allowedHosts: true,
 		proxy: {
 			"/events": {
-				target: "http://localhost:3100",
+				target: process.env.VITE_API_URL ?? "http://localhost:3100",
 				changeOrigin: true,
 			},
 			"/rpc": {
-				target: "http://localhost:3100",
+				target: process.env.VITE_API_URL ?? "http://localhost:3100",
 				changeOrigin: true,
 			},
 			"/images": {
-				target: "http://localhost:3100",
+				target: process.env.VITE_API_URL ?? "http://localhost:3100",
+				changeOrigin: true,
+			},
+			"/files": {
+				target: process.env.VITE_API_URL ?? "http://localhost:3100",
 				changeOrigin: true,
 			},
 		},

@@ -11,13 +11,12 @@ import {
 } from "../lib/web-settings";
 
 export const useWebSettings = () => {
-	const [settings, setSettings] = useState<WebAppSettings>(() => {
-		if (typeof window === "undefined") {
-			return defaultWebSettings;
-		}
-		return readWebSettings();
-	});
+	const [settings, setSettings] = useState<WebAppSettings>(defaultWebSettings);
 	const [remoteReady, setRemoteReady] = useState(false);
+
+	useEffect(() => {
+		setSettings(readWebSettings());
+	}, []);
 
 	useEffect(() => {
 		writeWebSettings(settings);

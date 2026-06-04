@@ -1,11 +1,14 @@
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=${PNPM_HOME}:${PATH}
 ENV YTDLP_PATH=/usr/bin/yt-dlp
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
-RUN apk add --no-cache yt-dlp ffmpeg python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg python3 python3-pip python3-dev make g++ wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp curl_cffi
 
 RUN corepack enable
 
@@ -32,11 +35,7 @@ EXPOSE 3100
 ENV VIDBEE_API_HOST=0.0.0.0
 ENV VIDBEE_API_PORT=3100
 ENV VIDBEE_DOWNLOAD_DIR=/data/downloads
-# Persistence is enabled by default so the `before-start` history migration
-# (legacy download_history → tasks) is actually visible at runtime, and so
-# crash-recovery works across container restarts. Mount /data/downloads as
-# a persistent volume in production (the Dockerfile already declares it).
-# To revert to the old stateless behavior set VIDBEE_PERSIST_QUEUE=0.
+ENV VIDBEE_DATA_DIR=/data/vidbee
 ENV VIDBEE_PERSIST_QUEUE=1
 
 VOLUME ["/data/downloads"]

@@ -360,3 +360,80 @@ export const GetWebSettingsOutputSchema = z.object({
 export const SetWebSettingsInputSchema = z.object({
   settings: WebAppSettingsSchema
 })
+
+export const AuthLoginInputSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1)
+})
+
+export const AuthLoginOutputSchema = z.object({
+  token: z.string(),
+  username: z.string()
+})
+
+export const UserEntrySchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  createdAt: z.number()
+})
+
+export const ListUsersOutputSchema = z.object({
+  users: z.array(UserEntrySchema)
+})
+
+export const CreateUserInputSchema = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().min(8).max(128)
+})
+
+export const CreateUserOutputSchema = z.object({
+  user: z.object({ id: z.string(), username: z.string() })
+})
+
+export const RemoveUserInputSchema = z.object({
+  id: z.string().min(1)
+})
+
+export const RemoveUserOutputSchema = z.object({
+  removed: z.boolean()
+})
+
+export const ChangePasswordInputSchema = z.object({
+  id: z.string().min(1),
+  password: z.string().min(8).max(128)
+})
+
+export const ChangePasswordOutputSchema = z.object({
+  ok: z.boolean()
+})
+
+export const SecurityStatusOutputSchema = z.object({
+  hasDefaultCredentials: z.boolean()
+})
+
+export const IpBlacklistEntrySchema = z.object({
+  ip: z.string(),
+  reason: z.string(),
+  blockedAt: z.number()
+})
+
+export const ListIpBlacklistOutputSchema = z.object({
+  entries: z.array(IpBlacklistEntrySchema)
+})
+
+export const AddToIpBlacklistInputSchema = z.object({
+  ip: z.string().min(1),
+  reason: z.string().optional()
+})
+
+export const AddToIpBlacklistOutputSchema = z.object({
+  added: z.boolean()
+})
+
+export const RemoveFromIpBlacklistInputSchema = z.object({
+  ip: z.string().min(1)
+})
+
+export const RemoveFromIpBlacklistOutputSchema = z.object({
+  removed: z.boolean()
+})

@@ -184,7 +184,7 @@ export const resolveVideoFormatSelector = (options: YtDlpDownloadOptions): strin
   const audioFormatIds = (options.audioFormatIds ?? []).filter((id) => id.trim() !== '')
 
   if (format && audioFormat === '') {
-    return format
+    return `${format}/bestvideo+bestaudio/best`
   }
 
   if (format && (format.includes('/') || format.includes('+') || format.includes('['))) {
@@ -237,7 +237,7 @@ export const buildDownloadArgs = (
   settings: YtDlpDownloadSettings,
   jsRuntimeArgs: string[] = []
 ): string[] => {
-  const args: string[] = ['--no-playlist', '--no-mtime', '--encoding', 'utf-8']
+  const args: string[] = ['--no-playlist', '--no-mtime', '--encoding', 'utf-8', '--print', 'after_move:VIDBEE_OUT:%(filepath)s']
 
   if (options.type === 'video') {
     const formatSelector = resolveVideoFormatSelector(options)
